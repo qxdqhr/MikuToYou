@@ -24,13 +24,13 @@ jobs:
           java-version: 17
       - name: Decode keystore
         run: |
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/${KEYSTORE_FILE}
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/mikutoyou-release-key.jks
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       - name: Write signing properties
         run: |
           cat >> android/gradle.properties <<PROPS
-          MYAPP_UPLOAD_STORE_FILE=release-keystore.jks
+          MYAPP_UPLOAD_STORE_FILE=mikutoyou-release-key.jks
           MYAPP_UPLOAD_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}
           MYAPP_UPLOAD_STORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           MYAPP_UPLOAD_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}
