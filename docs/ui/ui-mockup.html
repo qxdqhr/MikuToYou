@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MikuToYou UI Mockup</title>
+    <style>
+      :root {
+        --bg: #0b1220;
+        --panel: rgba(255, 255, 255, 0.08);
+        --panel-strong: rgba(255, 255, 255, 0.12);
+        --text-main: #e6edf7;
+        --text-sub: #94a3b8;
+        --primary: #39c5bb;
+        --danger: #ef4444;
+        --warning: #f59e0b;
+        --radius: 14px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: radial-gradient(circle at top, #1a2a4a 0%, var(--bg) 35%);
+        color: var(--text-main);
+        font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+
+      .page {
+        min-height: 100vh;
+        display: grid;
+        gap: 24px;
+        padding: 24px;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      }
+
+      .phone {
+        width: 100%;
+        max-width: 390px;
+        height: 812px;
+        margin: 0 auto;
+        background: rgba(8, 13, 24, 0.95);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 28px;
+        overflow: hidden;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+        position: relative;
+      }
+
+      .topbar {
+        height: 60px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 16px;
+        background: rgba(255, 255, 255, 0.04);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .title {
+        font-weight: 700;
+      }
+
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--text-sub);
+      }
+
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #22c55e;
+      }
+
+      .dot.offline {
+        background: var(--warning);
+      }
+
+      .content {
+        height: calc(100% - 60px - 68px);
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        overflow: hidden;
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: var(--radius);
+      }
+
+      .live2d {
+        min-height: 220px;
+        padding: 12px;
+        display: grid;
+        place-items: center;
+        text-align: center;
+      }
+
+      .live2d .canvas {
+        width: 100%;
+        height: 160px;
+        border-radius: 12px;
+        border: 1px dashed rgba(57, 197, 187, 0.55);
+        display: grid;
+        place-items: center;
+        color: var(--text-sub);
+      }
+
+      .btn {
+        border: 0;
+        border-radius: 10px;
+        padding: 8px 12px;
+        color: #052421;
+        background: var(--primary);
+        cursor: default;
+        font-weight: 600;
+      }
+
+      .btn.secondary {
+        background: rgba(255, 255, 255, 0.16);
+        color: var(--text-main);
+      }
+
+      .btn.danger {
+        background: rgba(239, 68, 68, 0.2);
+        color: #fecaca;
+        border: 1px solid rgba(239, 68, 68, 0.45);
+      }
+
+      .messages {
+        flex: 1;
+        padding: 12px;
+        overflow: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .bubble {
+        max-width: 82%;
+        padding: 10px 12px;
+        border-radius: 12px;
+        line-height: 1.45;
+        font-size: 14px;
+      }
+
+      .bubble.user {
+        align-self: flex-end;
+        background: rgba(57, 197, 187, 0.2);
+        border: 1px solid rgba(57, 197, 187, 0.5);
+      }
+
+      .bubble.assistant {
+        align-self: flex-start;
+        background: var(--panel-strong);
+      }
+
+      .bubble.error {
+        align-self: flex-start;
+        background: rgba(239, 68, 68, 0.18);
+        border: 1px solid rgba(239, 68, 68, 0.45);
+        color: #fecaca;
+      }
+
+      .composer {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+      }
+
+      .composer textarea {
+        width: 100%;
+        min-height: 44px;
+        max-height: 92px;
+        resize: none;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text-main);
+        padding: 10px;
+      }
+
+      .tabs {
+        height: 68px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.03);
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .tab {
+        display: grid;
+        place-items: center;
+        color: var(--text-sub);
+        font-size: 13px;
+      }
+
+      .tab.active {
+        color: var(--primary);
+        font-weight: 700;
+      }
+
+      .form {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      label {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--text-sub);
+      }
+
+      input {
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text-main);
+        padding: 10px;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .hint {
+        font-size: 12px;
+        color: var(--warning);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <section class="phone">
+        <header class="topbar">
+          <div class="title">MikuToYou</div>
+          <div class="status"><span class="dot"></span>API 已配置</div>
+        </header>
+        <main class="content">
+          <article class="panel live2d">
+            <div class="canvas">Live2D Canvas（模型正常加载）</div>
+          </article>
+          <article class="panel messages">
+            <div class="bubble assistant">你好，我是 MikuToYou，今天想聊点什么？</div>
+            <div class="bubble user">帮我规划一下明天的学习安排。</div>
+            <div class="bubble assistant">可以，先从 25 分钟番茄钟开始，再安排复盘。</div>
+            <div class="bubble error">网络波动，刚刚的请求失败，请重试。</div>
+          </article>
+          <div class="composer">
+            <textarea placeholder="输入你的问题..."></textarea>
+            <button class="btn">发送</button>
+          </div>
+        </main>
+        <nav class="tabs">
+          <div class="tab active">聊天</div>
+          <div class="tab">设置</div>
+        </nav>
+      </section>
+
+      <section class="phone">
+        <header class="topbar">
+          <div class="title">MikuToYou</div>
+          <div class="status"><span class="dot offline"></span>API 未配置</div>
+        </header>
+        <main class="content">
+          <article class="panel messages" style="flex: 0 0 auto; padding: 16px">
+            <strong>空状态示意</strong>
+            <p style="color: var(--text-sub); margin: 8px 0 12px">
+              先到设置页填写 API 地址与 Key，然后返回聊天页开始对话。
+            </p>
+            <button class="btn secondary">去设置</button>
+          </article>
+
+          <article class="panel live2d" style="min-height: 180px">
+            <div>
+              <div class="canvas" style="margin-bottom: 10px">Live2D 加载失败占位</div>
+              <button class="btn secondary">重试加载模型</button>
+            </div>
+          </article>
+
+          <article class="panel" style="padding: 12px">
+            <form class="form">
+              <label>
+                API Base URL
+                <input type="text" value="https://api.example.com/v1/chat/completions" />
+              </label>
+              <label>
+                API Key
+                <input type="password" value="sk-********" />
+              </label>
+              <label>
+                Model
+                <input type="text" value="gpt-4o-mini" />
+              </label>
+              <label>
+                Live2D 模型地址
+                <input type="text" value="https://cdn.example.com/miku/model.json" />
+              </label>
+              <div class="actions">
+                <button class="btn" type="button">保存设置</button>
+                <button class="btn secondary" type="button">测试连接</button>
+                <button class="btn danger" type="button">清空聊天记录</button>
+              </div>
+              <div class="hint">提示：纯前端模式下，请妥善保管 API Key。</div>
+            </form>
+          </article>
+        </main>
+        <nav class="tabs">
+          <div class="tab">聊天</div>
+          <div class="tab active">设置</div>
+        </nav>
+      </section>
+    </div>
+  </body>
+  </html>
