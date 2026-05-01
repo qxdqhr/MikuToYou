@@ -142,7 +142,16 @@ font-size:11px;background:rgba(0,0,0,.45);padding:8px;border-radius:8px;word-bre
 
       post({type:'live2d-loaded',modelUrl:MODEL_URL});
     }catch(e){
-      showErr(e&&e.message?e.message:String(e));
+      var msg=e&&e.message?String(e.message):String(e);
+      try{
+        var ev=e&&e.event;
+        var t=ev&&ev.target;
+        if(t){
+          if(t.src) msg+=' | src='+t.src;
+          else if(t.currentSrc) msg+=' | src='+t.currentSrc;
+        }
+      }catch(_){}
+      showErr(msg);
     }
   }
   main();

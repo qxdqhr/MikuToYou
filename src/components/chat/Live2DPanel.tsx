@@ -11,6 +11,9 @@ type Props = {
   modelUrl: string;
 };
 
+/** 与 loadHTMLString/loadDataWithBaseURL 的文档源一致，避免 null origin 下部分纹理站 CORS 异常。 */
+const LIVE2D_WEBVIEW_BASE_URL = 'https://localhost/';
+
 export function Live2DPanel({ modelUrl }: Props) {
   const [failed, setFailed] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
@@ -74,7 +77,7 @@ export function Live2DPanel({ modelUrl }: Props) {
       <WebView
         key={webKey}
         originWhitelist={['*']}
-        source={{ html }}
+        source={{ html, baseUrl: LIVE2D_WEBVIEW_BASE_URL }}
         onMessage={onMessage}
         onError={onError}
         style={styles.webview}
