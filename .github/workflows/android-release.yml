@@ -44,6 +44,64 @@ jobs:
         run: |
           cd android
           ./gradlew assembleRelease
+      - name: Install ossutil
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          curl -fsSL -o /tmp/ossutil.zip "https://gosspublic.alicdn.com/ossutil/1.7.19/ossutil-v1.7.19-linux-amd64.zip"
+          unzip -o -q /tmp/ossutil.zip -d /tmp/ossutil
+          mkdir -p "${HOME}/bin"
+          install -m755 /tmp/ossutil/ossutil-v1.7.19-linux-amd64/ossutil64 "${HOME}/bin/ossutil64"
+      - name: Upload release APK to Aliyun OSS
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          ALIYUN_OSS_BUCKET: ${{ secrets.ALIYUN_OSS_BUCKET }}
+          ALIYUN_OSS_ENDPOINT: ${{ secrets.ALIYUN_OSS_ENDPOINT }}
+          ALIYUN_OSS_ACCESS_KEY_ID: ${{ secrets.ALIYUN_OSS_ACCESS_KEY_ID }}
+          ALIYUN_OSS_ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_OSS_ACCESS_KEY_SECRET }}
+          ALIYUN_OSS_OBJECT_KEY: ${{ secrets.ALIYUN_OSS_OBJECT_KEY }}
+          ALIYUN_OSS_CDN_BASE: ${{ secrets.ALIYUN_OSS_CDN_BASE }}
+        run: |
+          set -euo pipefail
+          APK="android/app/build/outputs/apk/release/app-release.apk"
+          if [[ ! -f "$APK" ]]; then
+            echo "Release APK missing at $APK" >&2
+            exit 1
+          fi
+          if [[ -z "${ALIYUN_OSS_BUCKET:-}" || -z "${ALIYUN_OSS_ENDPOINT:-}" || \
+                -z "${ALIYUN_OSS_ACCESS_KEY_ID:-}" || -z "${ALIYUN_OSS_ACCESS_KEY_SECRET:-}" ]]; then
+            echo "OSS secrets not set (ALIYUN_OSS_BUCKET / ENDPOINT / ACCESS_KEY_ID / ACCESS_KEY_SECRET); skip OSS upload."
+            exit 0
+          fi
+          EP="${ALIYUN_OSS_ENDPOINT#https://}"
+          EP="${EP#http://}"
+          REPO_NAME="${GITHUB_REPOSITORY##*/}"
+          TAG="${GITHUB_REF_NAME}"
+          OBJECT_KEY="${ALIYUN_OSS_OBJECT_KEY:-releases/${REPO_NAME}/${TAG}/app-release.apk}"
+          "${HOME}/bin/ossutil64" cp -f "$APK" "oss://${ALIYUN_OSS_BUCKET}/${OBJECT_KEY}" \
+            -e "$EP" \
+            -i "${ALIYUN_OSS_ACCESS_KEY_ID}" \
+            -k "${ALIYUN_OSS_ACCESS_KEY_SECRET}"
+          LINK1="https://${ALIYUN_OSS_BUCKET}.${EP}/${OBJECT_KEY}"
+          if [[ -n "${ALIYUN_OSS_CDN_BASE:-}" ]]; then
+            CDN="${ALIYUN_OSS_CDN_BASE#https://}"
+            CDN="${CDN#http://}"
+            LINK2="https://${CDN}/${OBJECT_KEY}"
+          else
+            LINK2="https://${EP}/${ALIYUN_OSS_BUCKET}/${OBJECT_KEY}"
+          fi
+          {
+            echo "### OSS APK（与本地打包脚本同一路径规则）"
+            echo ""
+            echo "**虚拟主机样式**："
+            echo "\`${LINK1}\`"
+            echo ""
+            echo "**路径样式或 CDN**："
+            echo "\`${LINK2}\`"
+            echo ""
+            echo "Object: \`${OBJECT_KEY}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
+          echo "OSS virtual-host URL: ${LINK1}"
+          echo "OSS path/CDN URL:      ${LINK2}"
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
