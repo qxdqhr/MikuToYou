@@ -40,6 +40,10 @@ jobs:
           PROPS
       - name: Install deps
         run: pnpm install --frozen-lockfile
+      - name: Sync release tag into app
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: pnpm run sync:release-tag
       - name: Build release
         run: |
           cd android

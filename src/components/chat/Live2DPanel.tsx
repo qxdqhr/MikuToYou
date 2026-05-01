@@ -60,10 +60,14 @@ export function Live2DPanel({ modelUrl }: Props) {
     return (
       <View style={styles.panel}>
         <Text style={styles.failTitle}>Live2D 加载失败</Text>
-        {hint ? <Text style={styles.failDetail}>{hint}</Text> : null}
+        {hint ? (
+          <Text selectable style={styles.failDetail}>
+            {hint}
+          </Text>
+        ) : null}
         <Text style={styles.failHint}>
           请确认地址为可访问的 model3.json，且资源站允许跨域（CORS）。可换用演示模型
-          地址在设置页占位中复制。
+          地址在设置页占位中复制。长按红色错误文本可复制详情。
         </Text>
         <Pressable style={styles.retry} onPress={() => setFailed(false)}>
           <Text style={styles.retryText}>重试</Text>

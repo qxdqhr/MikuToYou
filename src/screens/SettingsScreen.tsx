@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,13 +12,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TopBar } from '../components/layout/TopBar';
 import { DEMO_MODEL3_URL } from '../components/chat/live2dViewer';
+import { RELEASE_TAG } from '../constants/releaseTag';
 import { testConnection } from '../services/llmClient';
 import { useApp } from '../state/AppContext';
 import type { AppSettings } from '../types/settings';
 import { defaultAppSettings } from '../types/settings';
 import { colors, radius, space } from '../theme/tokens';
 
-const APP_VERSION = String(require('../../package.json').version ?? '0.0.0');
+const APP_VERSION = RELEASE_TAG;
 
 export function SettingsScreen() {
   const { settings, replaceSettings, clearChat, ready } = useApp();
@@ -67,24 +69,6 @@ export function SettingsScreen() {
 
   if (!ready) {
     return <View style={styles.root} />;
-  }
-
-  if (page === 'about') {
-    return (
-      <SafeAreaView style={styles.root} edges={['top']}>
-        <View style={styles.aboutHeader}>
-          <Pressable onPress={() => setPage('settings')}>
-            <Text style={styles.aboutBack}>返回</Text>
-          </Pressable>
-          <Text style={styles.aboutTitle}>关于</Text>
-          <View style={styles.aboutHeaderSpacer} />
-        </View>
-        <View style={styles.aboutCard}>
-          <Text style={styles.aboutName}>MikuToYou</Text>
-          <Text style={styles.aboutVersion}>版本 {APP_VERSION}</Text>
-        </View>
-      </SafeAreaView>
-    );
   }
 
   return (
@@ -156,6 +140,25 @@ export function SettingsScreen() {
           纯客户端直连 API 时，请妥善保管 API Key；不要提交到公开仓库。
         </Text>
       </ScrollView>
+      <Modal
+        visible={page === 'about'}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setPage('settings')}>
+        <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
+          <View style={styles.aboutHeader}>
+            <Pressable onPress={() => setPage('settings')}>
+              <Text style={styles.aboutBack}>返回</Text>
+            </Pressable>
+            <Text style={styles.aboutTitle}>关于</Text>
+            <View style={styles.aboutHeaderSpacer} />
+          </View>
+          <View style={styles.aboutCard}>
+            <Text style={styles.aboutName}>MikuToYou</Text>
+            <Text style={styles.aboutVersion}>版本 {APP_VERSION}</Text>
+          </View>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
