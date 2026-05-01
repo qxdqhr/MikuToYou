@@ -102,6 +102,31 @@ font-size:11px;background:rgba(0,0,0,.45);padding:8px;border-radius:8px;word-bre
   var PIXI_URL=${pixi};
   var PLD=${pld};
 
+  function resolveUrl(base, rel){
+    try{return new URL(rel, base).toString();}catch(_){return rel;}
+  }
+  async function fetchSettings(modelUrl){
+    var r=await fetch(modelUrl,{method:'GET',mode:'cors',cache:'no-store'});
+    if(!r.ok) throw new Error('模型 JSON 请求失败: '+r.status+' '+r.statusText);
+    var json=await r.json();
+    if(!json||typeof json!=='object') throw new Error('模型 JSON 非法');
+    json.url=modelUrl;
+    return json;
+  }
+  function preloadImage(url){
+    return new Promise(function(resolve,reject){
+      var img=new Image();
+      img.crossOrigin='anonymous';
+      img.onload=function(){resolve(url);};
+      img.onerror=function(ev){
+        var err=new Error('纹理预加载失败: '+url);
+        err.event=ev;
+        reject(err);
+      };
+      img.src=url;
+    });
+  }
+
   async function main(){
     if(!MODEL_URL||!MODEL_URL.trim()){
       showErr('模型地址为空');
@@ -117,6 +142,15 @@ font-size:11px;background:rgba(0,0,0,.45);padding:8px;border-radius:8px;word-bre
       }
       await loadScript(PLD);
       if(!PIXI.live2d||!PIXI.live2d.Live2DModel) throw new Error('pixi-live2d-display 未挂载到 PIXI.live2d');
+
+      var settings=await fetchSettings(MODEL_URL.trim());
+      var textures=((settings.FileReferences&&settings.FileReferences.Textures)||[]);
+      if(Array.isArray(textures)&&textures.length){
+        var textureUrls=textures.map(function(tex){return resolveUrl(MODEL_URL.trim(), String(tex));});
+        for(var i=0;i<textureUrls.length;i++){
+          await preloadImage(textureUrls[i]);
+        }
+      }
 
       var canvas=document.getElementById('c');
       var dpr=Math.min(window.devicePixelRatio||1,2);
@@ -136,7 +170,7 @@ font-size:11px;background:rgba(0,0,0,.45);padding:8px;border-radius:8px;word-bre
       var Live2DModel=PIXI.live2d.Live2DModel;
       Live2DModel.registerTicker(PIXI.Ticker);
 
-      var model=await Live2DModel.from(MODEL_URL.trim(),{
+      var model=await Live2DModel.from(settings,{
         crossOrigin:'anonymous',
         autoInteract:true
       });

@@ -17,10 +17,13 @@ import type { AppSettings } from '../types/settings';
 import { defaultAppSettings } from '../types/settings';
 import { colors, radius, space } from '../theme/tokens';
 
+const APP_VERSION = String(require('../../package.json').version ?? '0.0.0');
+
 export function SettingsScreen() {
   const { settings, replaceSettings, clearChat, ready } = useApp();
   const [draft, setDraft] = useState<AppSettings>(defaultAppSettings);
   const [testing, setTesting] = useState(false);
+  const [page, setPage] = useState<'settings' | 'about'>('settings');
 
   useEffect(() => {
     if (ready) {
@@ -64,6 +67,24 @@ export function SettingsScreen() {
 
   if (!ready) {
     return <View style={styles.root} />;
+  }
+
+  if (page === 'about') {
+    return (
+      <SafeAreaView style={styles.root} edges={['top']}>
+        <View style={styles.aboutHeader}>
+          <Pressable onPress={() => setPage('settings')}>
+            <Text style={styles.aboutBack}>返回</Text>
+          </Pressable>
+          <Text style={styles.aboutTitle}>关于</Text>
+          <View style={styles.aboutHeaderSpacer} />
+        </View>
+        <View style={styles.aboutCard}>
+          <Text style={styles.aboutName}>MikuToYou</Text>
+          <Text style={styles.aboutVersion}>版本 {APP_VERSION}</Text>
+        </View>
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -125,6 +146,11 @@ export function SettingsScreen() {
             <Text style={styles.dangerText}>清空聊天记录</Text>
           </Pressable>
         </View>
+
+        <Pressable style={styles.aboutEntry} onPress={() => setPage('about')}>
+          <Text style={styles.aboutEntryTitle}>关于</Text>
+          <Text style={styles.aboutEntryHint}>查看应用版本信息</Text>
+        </Pressable>
 
         <Text style={styles.hint}>
           纯客户端直连 API 时，请妥善保管 API Key；不要提交到公开仓库。
@@ -246,5 +272,64 @@ const styles = StyleSheet.create({
     color: colors.warning,
     fontSize: 12,
     lineHeight: 16,
+  },
+  aboutEntry: {
+    marginTop: space.md,
+    borderRadius: radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+  },
+  aboutEntryTitle: {
+    color: colors.textMain,
+    fontWeight: '700',
+  },
+  aboutEntryHint: {
+    color: colors.textSub,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  aboutHeader: {
+    height: 52,
+    paddingHorizontal: space.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  aboutBack: {
+    color: colors.primary,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  aboutTitle: {
+    color: colors.textMain,
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  aboutHeaderSpacer: {
+    width: 30,
+  },
+  aboutCard: {
+    margin: space.md,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    backgroundColor: colors.panel,
+    padding: space.md,
+  },
+  aboutName: {
+    color: colors.textMain,
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  aboutVersion: {
+    marginTop: space.xs,
+    color: colors.textSub,
+    fontSize: 13,
   },
 });
