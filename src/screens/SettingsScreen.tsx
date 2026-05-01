@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TopBar } from '../components/layout/TopBar';
+import { DEMO_MODEL3_URL } from '../components/chat/live2dViewer';
 import { testConnection } from '../services/llmClient';
 import { useApp } from '../state/AppContext';
 import type { AppSettings } from '../types/settings';
@@ -94,12 +95,19 @@ export function SettingsScreen() {
           autoCapitalize="none"
         />
         <Field
-          label="Live2D 模型地址"
+          label="Live2D 模型地址（model3.json）"
           value={draft.live2dModelUrl}
           onChangeText={v => setDraft(s => ({ ...s, live2dModelUrl: v }))}
-          placeholder="https://.../model.json"
+          placeholder={DEMO_MODEL3_URL}
           autoCapitalize="none"
         />
+        <Pressable
+          style={styles.demoBtn}
+          onPress={() =>
+            setDraft(s => ({ ...s, live2dModelUrl: DEMO_MODEL3_URL }))
+          }>
+          <Text style={styles.demoBtnText}>填入演示 model3（Haru 联调用）</Text>
+        </Pressable>
 
         <View style={styles.actions}>
           <Pressable style={styles.primary} onPress={() => void onSave()}>
@@ -184,6 +192,18 @@ const styles = StyleSheet.create({
     color: colors.textMain,
     paddingHorizontal: space.sm,
     paddingVertical: 10,
+  },
+  demoBtn: {
+    alignSelf: 'flex-start',
+    marginTop: -space.sm,
+    marginBottom: space.md,
+    paddingVertical: 6,
+    paddingHorizontal: space.sm,
+  },
+  demoBtnText: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '700',
   },
   actions: {
     marginTop: space.sm,
