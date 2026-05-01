@@ -80,6 +80,17 @@ font-size:11px;background:rgba(0,0,0,.45);padding:8px;border-radius:8px;word-bre
 <div id="err"></div>
 <script>
 (function(){
+  function normalizeModelUrl(u){
+    try{
+      var x=new URL(String(u||'').trim());
+      if(x.hostname==='fastly.jsdelivr.net'){
+        x.hostname='cdn.jsdelivr.net';
+      }
+      return x.toString();
+    }catch(_){
+      return String(u||'').trim();
+    }
+  }
   function post(o){try{if(window.ReactNativeWebView&&window.ReactNativeWebView.postMessage)
     window.ReactNativeWebView.postMessage(JSON.stringify(o));}catch(e){}}
   function showErr(msg){
@@ -103,14 +114,15 @@ font-size:11px;background:rgba(0,0,0,.45);padding:8px;border-radius:8px;word-bre
   var PLD=${pld};
 
   function resolveUrl(base, rel){
-    try{return new URL(rel, base).toString();}catch(_){return rel;}
+    try{return normalizeModelUrl(new URL(rel, base).toString());}catch(_){return normalizeModelUrl(rel);}
   }
   async function fetchSettings(modelUrl){
-    var r=await fetch(modelUrl,{method:'GET',mode:'cors',cache:'no-store'});
+    var normalized=normalizeModelUrl(modelUrl);
+    var r=await fetch(normalized,{method:'GET',mode:'cors',cache:'no-store'});
     if(!r.ok) throw new Error('模型 JSON 请求失败: '+r.status+' '+r.statusText);
     var json=await r.json();
     if(!json||typeof json!=='object') throw new Error('模型 JSON 非法');
-    json.url=modelUrl;
+    json.url=normalized;
     return json;
   }
   function preloadImage(url){
@@ -143,12 +155,18 @@ font-size:11px;background:rgba(0,0,0,.45);padding:8px;border-radius:8px;word-bre
       await loadScript(PLD);
       if(!PIXI.live2d||!PIXI.live2d.Live2DModel) throw new Error('pixi-live2d-display 未挂载到 PIXI.live2d');
 
-      var settings=await fetchSettings(MODEL_URL.trim());
+      var normalizedModelUrl=normalizeModelUrl(MODEL_URL.trim());
+      var settings=await fetchSettings(normalizedModelUrl);
       var textures=((settings.FileReferences&&settings.FileReferences.Textures)||[]);
       if(Array.isArray(textures)&&textures.length){
-        var textureUrls=textures.map(function(tex){return resolveUrl(MODEL_URL.trim(), String(tex));});
+        var textureUrls=textures.map(function(tex){return resolveUrl(settings.url||normalizedModelUrl, String(tex));});
         for(var i=0;i<textureUrls.length;i++){
-          await preloadImage(textureUrls[i]);
+          try{
+            await preloadImage(textureUrls[i]);
+          }catch(preErr){
+            // 预加载用于诊断；失败时继续走正式加载，避免误杀可加载模型。
+            post({type:'live2d-warn',message:(preErr&&preErr.message)?String(preErr.message):String(preErr)});
+          }
         }
       }
 
