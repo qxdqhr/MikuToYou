@@ -3,7 +3,7 @@ name: Android Release Asset
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
 
 jobs:
@@ -13,47 +13,58 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+
       - uses: pnpm/action-setup@v4
         with:
           version: 9
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
+
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
+
       - name: Decode keystore
-        run: |
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/mikutoyou-release-key.jks
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-      - name: Write signing properties
         run: |
-          cat >> android/gradle.properties <<PROPS
-          MYAPP_UPLOAD_STORE_FILE=mikutoyou-release-key.jks
-          MYAPP_UPLOAD_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}
-          MYAPP_UPLOAD_STORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          MYAPP_UPLOAD_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}
-          PROPS
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/mikutoyou-release-key.jks
+
+      - name: Write signing properties
+        env:
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          {
+            echo "MYAPP_UPLOAD_STORE_FILE=mikutoyou-release-key.jks"
+            echo "MYAPP_UPLOAD_KEY_ALIAS=${ANDROID_KEY_ALIAS}"
+            echo "MYAPP_UPLOAD_STORE_PASSWORD=${ANDROID_KEYSTORE_PASSWORD}"
+            echo "MYAPP_UPLOAD_KEY_PASSWORD=${ANDROID_KEY_PASSWORD}"
+          } >> android/gradle.properties
+
       - name: Install deps
         run: pnpm install --frozen-lockfile
+
       - name: Build release
         run: |
           cd android
           ./gradlew assembleRelease
+
       - name: Install ossutil
-        if: startsWith(github.ref, 'refs/tags/')
         run: |
           curl -fsSL -o /tmp/ossutil.zip "https://gosspublic.alicdn.com/ossutil/1.7.19/ossutil-v1.7.19-linux-amd64.zip"
           unzip -o -q /tmp/ossutil.zip -d /tmp/ossutil
           mkdir -p "${HOME}/bin"
           install -m755 /tmp/ossutil/ossutil-v1.7.19-linux-amd64/ossutil64 "${HOME}/bin/ossutil64"
+
       - name: Upload release APK to Aliyun OSS
         id: upload_oss
-        if: startsWith(github.ref, 'refs/tags/')
         env:
           ALIYUN_OSS_BUCKET: ${{ secrets.ALIYUN_OSS_BUCKET }}
           ALIYUN_OSS_ENDPOINT: ${{ secrets.ALIYUN_OSS_ENDPOINT }}
@@ -68,9 +79,8 @@ jobs:
             echo "Release APK missing at $APK" >&2
             exit 1
           fi
-          if [[ -z "${ALIYUN_OSS_BUCKET:-}" || -z "${ALIYUN_OSS_ENDPOINT:-}" || \
-                -z "${ALIYUN_OSS_ACCESS_KEY_ID:-}" || -z "${ALIYUN_OSS_ACCESS_KEY_SECRET:-}" ]]; then
-            echo "OSS secrets not set (ALIYUN_OSS_BUCKET / ENDPOINT / ACCESS_KEY_ID / ACCESS_KEY_SECRET); skip OSS upload."
+          if [[ -z "${ALIYUN_OSS_BUCKET:-}" || -z "${ALIYUN_OSS_ENDPOINT:-}" || -z "${ALIYUN_OSS_ACCESS_KEY_ID:-}" || -z "${ALIYUN_OSS_ACCESS_KEY_SECRET:-}" ]]; then
+            echo "OSS secrets missing, skip OSS upload."
             exit 0
           fi
           EP="${ALIYUN_OSS_ENDPOINT#https://}"
@@ -78,10 +88,7 @@ jobs:
           REPO_NAME="${GITHUB_REPOSITORY##*/}"
           TAG="${GITHUB_REF_NAME}"
           OBJECT_KEY="${ALIYUN_OSS_OBJECT_KEY:-releases/${REPO_NAME}/${TAG}/app-release.apk}"
-          "${HOME}/bin/ossutil64" cp -f "$APK" "oss://${ALIYUN_OSS_BUCKET}/${OBJECT_KEY}" \
-            -e "$EP" \
-            -i "${ALIYUN_OSS_ACCESS_KEY_ID}" \
-            -k "${ALIYUN_OSS_ACCESS_KEY_SECRET}"
+          "${HOME}/bin/ossutil64" cp -f "$APK" "oss://${ALIYUN_OSS_BUCKET}/${OBJECT_KEY}" -e "$EP" -i "${ALIYUN_OSS_ACCESS_KEY_ID}" -k "${ALIYUN_OSS_ACCESS_KEY_SECRET}"
           LINK1="https://${ALIYUN_OSS_BUCKET}.${EP}/${OBJECT_KEY}"
           if [[ -n "${ALIYUN_OSS_CDN_BASE:-}" ]]; then
             CDN="${ALIYUN_OSS_CDN_BASE#https://}"
@@ -90,26 +97,13 @@ jobs:
           else
             LINK2="https://${EP}/${ALIYUN_OSS_BUCKET}/${OBJECT_KEY}"
           fi
-          {
-            echo "### OSS APK（与本地打包脚本同一路径规则）"
-            echo ""
-            echo "**虚拟主机样式**："
-            echo "\`${LINK1}\`"
-            echo ""
-            echo "**路径样式或 CDN**："
-            echo "\`${LINK2}\`"
-            echo ""
-            echo "Object: \`${OBJECT_KEY}\`"
-          } >> "${GITHUB_STEP_SUMMARY}"
-          {
-            echo "oss_link_virtual=${LINK1}"
-            echo "oss_link_cdn=${LINK2}"
-            echo "oss_object_key=${OBJECT_KEY}"
-          } >> "${GITHUB_OUTPUT}"
+          echo "oss_link_virtual=${LINK1}" >> "${GITHUB_OUTPUT}"
+          echo "oss_link_cdn=${LINK2}" >> "${GITHUB_OUTPUT}"
+          echo "oss_object_key=${OBJECT_KEY}" >> "${GITHUB_OUTPUT}"
           echo "OSS virtual-host URL: ${LINK1}"
           echo "OSS path/CDN URL:      ${LINK2}"
+
       - name: Notify Feishu bot with APK download link
-        if: startsWith(github.ref, 'refs/tags/')
         env:
           FEISHU_BOT_WEBHOOK: ${{ secrets.FEISHU_BOT_WEBHOOK }}
           FEISHU_BOT_SECRET: ${{ secrets.FEISHU_BOT_SECRET }}
@@ -126,7 +120,6 @@ jobs:
             echo "OSS link missing, skip Feishu notification."
             exit 0
           fi
-
           LINK="${OSS_LINK_CDN:-$OSS_LINK_VIRTUAL}"
           TAG="${GITHUB_REF_NAME}"
           REPO="${GITHUB_REPOSITORY}"
@@ -134,45 +127,41 @@ jobs:
           COMMIT_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
           SHORT_SHA="${GITHUB_SHA:0:7}"
           TS="$(date +%s)"
-
           SIGN=""
           if [[ -n "${FEISHU_BOT_SECRET:-}" ]]; then
             SIGN="$(printf "%s\n%s" "${TS}" "${FEISHU_BOT_SECRET}" | openssl dgst -sha256 -hmac "${FEISHU_BOT_SECRET}" -binary | base64)"
           fi
-
           python - <<'PY' > /tmp/feishu_payload.json
 import json, os
 payload = {
-  "msg_type": "post",
-  "content": {
-    "post": {
-      "zh_cn": {
-        "title": "Android Release APK 已上传",
-        "content": [
-          [{"tag": "text", "text": f"仓库：{os.environ.get('REPO','')}"}],
-          [{"tag": "text", "text": f"版本：{os.environ.get('TAG','')}"}],
-          [{"tag": "text", "text": f"提交：{os.environ.get('SHORT_SHA','')}"}],
-          [{"tag": "text", "text": "下载："}, {"tag": "a", "text": "点击下载 APK", "href": os.environ.get("LINK","")}],
-          [{"tag": "text", "text": "对象路径："}, {"tag": "text", "text": os.environ.get("OSS_OBJECT_KEY","")}],
-          [{"tag": "text", "text": "构建记录："}, {"tag": "a", "text": "查看 GitHub Actions", "href": os.environ.get("RUN_URL","")}],
-          [{"tag": "text", "text": "提交详情："}, {"tag": "a", "text": os.environ.get("SHORT_SHA",""), "href": os.environ.get("COMMIT_URL","")}]
-        ]
-      }
-    }
-  }
+    "msg_type": "post",
+    "content": {
+        "post": {
+            "zh_cn": {
+                "title": "Android Release APK 已上传",
+                "content": [
+                    [{"tag": "text", "text": f"仓库：{os.environ.get('REPO', '')}"}],
+                    [{"tag": "text", "text": f"版本：{os.environ.get('TAG', '')}"}],
+                    [{"tag": "text", "text": f"提交：{os.environ.get('SHORT_SHA', '')}"}],
+                    [{"tag": "text", "text": "下载："}, {"tag": "a", "text": "点击下载 APK", "href": os.environ.get("LINK", "")}],
+                    [{"tag": "text", "text": "对象路径："}, {"tag": "text", "text": os.environ.get("OSS_OBJECT_KEY", "")}],
+                    [{"tag": "text", "text": "构建记录："}, {"tag": "a", "text": "查看 GitHub Actions", "href": os.environ.get("RUN_URL", "")}],
+                    [{"tag": "text", "text": "提交详情："}, {"tag": "a", "text": os.environ.get("SHORT_SHA", ""), "href": os.environ.get("COMMIT_URL", "")}]
+                ],
+            }
+        }
+    },
 }
-ts = os.environ.get("TS","")
-sign = os.environ.get("SIGN","")
+ts = os.environ.get("TS", "")
+sign = os.environ.get("SIGN", "")
 if ts and sign:
     payload["timestamp"] = ts
     payload["sign"] = sign
 print(json.dumps(payload, ensure_ascii=False))
 PY
-
-          curl -fsSL -X POST "${FEISHU_BOT_WEBHOOK}" \
-            -H 'Content-Type: application/json' \
-            --data-binary @/tmp/feishu_payload.json
+          curl -fsSL -X POST "${FEISHU_BOT_WEBHOOK}" -H "Content-Type: application/json" --data-binary @/tmp/feishu_payload.json
           echo "Feishu notification sent."
+
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
