@@ -113,7 +113,7 @@ font-size:11px;background:rgba(0,0,0,.45);padding:8px;border-radius:8px;word-bre
       });
 
       var Live2DModel=PIXI.live2d.Live2DModel;
-      Live2DModel.registerTicker(app);
+      Live2DModel.registerTicker(PIXI.Ticker);
 
       var model=await Live2DModel.from(MODEL_URL.trim(),{
         crossOrigin:'anonymous',
