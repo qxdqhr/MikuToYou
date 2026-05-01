@@ -13,9 +13,27 @@ export const PIXI_CDN =
 export const PIXI_LIVE2D_CUBISM4_CDN =
   'https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/cubism4.min.js';
 
-/** Haru 演示模型（pixi-live2d-display 仓库测试资源，仅用于联调）。 */
+/**
+ * Haru 演示模型（pixi-live2d-display 仓库测试资源，仅用于联调）。
+ * 使用固定 commit，避免 @master 漂移导致相对纹理路径 404。
+ */
 export const DEMO_MODEL3_URL =
-  'https://cdn.jsdelivr.net/gh/guansss/pixi-live2d-display@master/test/assets/haru/haru_greeter_t03.model3.json';
+  'https://cdn.jsdelivr.net/gh/guansss/pixi-live2d-display@31317b37d5e22955a44d5b11f37f421e94a11269/test/assets/haru/haru_greeter_t03.model3.json';
+
+/** 与 loadHTMLString 的 baseUrl 一致：优先使用模型所在源，减少 WebView 下跨域页面加载纹理失败。 */
+export function live2dWebViewBaseUrl(modelUrl: string): string {
+  const t = modelUrl.trim();
+  if (!t) return 'https://localhost/';
+  try {
+    const u = new URL(t);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+      return 'https://localhost/';
+    }
+    return `${u.origin}/`;
+  } catch {
+    return 'https://localhost/';
+  }
+}
 
 export function buildLive2dPlaceholderHtml(): string {
   return `<!doctype html>
@@ -94,6 +112,9 @@ font-size:11px;background:rgba(0,0,0,.45);padding:8px;border-radius:8px;word-bre
       if(typeof Live2DCubismCore==='undefined') throw new Error('Cubism Core 未就绪');
       await loadScript(PIXI_URL);
       if(typeof PIXI==='undefined') throw new Error('Pixi 未就绪');
+      if(PIXI.settings){
+        PIXI.settings.CREATE_IMAGE_BITMAP=false;
+      }
       await loadScript(PLD);
       if(!PIXI.live2d||!PIXI.live2d.Live2DModel) throw new Error('pixi-live2d-display 未挂载到 PIXI.live2d');
 

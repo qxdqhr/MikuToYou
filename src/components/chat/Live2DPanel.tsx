@@ -5,20 +5,20 @@ import { colors, radius, space } from '../../theme/tokens';
 import {
   buildLive2dPlaceholderHtml,
   buildLive2dViewerHtml,
+  live2dWebViewBaseUrl,
 } from './live2dViewer';
 
 type Props = {
   modelUrl: string;
 };
 
-/** 与 loadHTMLString/loadDataWithBaseURL 的文档源一致，避免 null origin 下部分纹理站 CORS 异常。 */
-const LIVE2D_WEBVIEW_BASE_URL = 'https://localhost/';
-
 export function Live2DPanel({ modelUrl }: Props) {
   const [failed, setFailed] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
 
   const trimmed = modelUrl.trim();
+  const baseUrl = useMemo(() => live2dWebViewBaseUrl(trimmed), [trimmed]);
+
   const html = useMemo(
     () =>
       trimmed ? buildLive2dViewerHtml(trimmed) : buildLive2dPlaceholderHtml(),
@@ -77,7 +77,7 @@ export function Live2DPanel({ modelUrl }: Props) {
       <WebView
         key={webKey}
         originWhitelist={['*']}
-        source={{ html, baseUrl: LIVE2D_WEBVIEW_BASE_URL }}
+        source={{ html, baseUrl }}
         onMessage={onMessage}
         onError={onError}
         style={styles.webview}
