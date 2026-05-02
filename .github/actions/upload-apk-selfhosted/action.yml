@@ -1,0 +1,112 @@
+name: Upload APK to self-hosted
+description: >
+  将 debug / release APK SCP 到自建文件服务根目录（LOCAL_APK_REMOTE_DIR，应对 HTTP 根目录）。
+  目录规则（与 scripts/publish-apk-local.sh 一致）：
+  - Debug: {REMOTE}/debug/{versionName}/{branch}-{shortSha}/mikutoyou-debug-{shortSha}.apk
+  - Release: {REMOTE}/release/{tag}/mikutoyou-{tag}.apk
+  versionName 从 android/app/build.gradle 解析。需在调用 step 的 env 中传入 LOCAL_APK_* secrets。
+
+inputs:
+  build_mode:
+    description: debug 或 release
+    required: true
+  apk_path:
+    description: 相对仓库根目录的 APK 路径
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: SCP to self-hosted
+      shell: bash
+      env:
+        BUILD_MODE: ${{ inputs.build_mode }}
+        APK_PATH: ${{ inputs.apk_path }}
+      run: |
+        set -euo pipefail
+        MODE="${BUILD_MODE}"
+        APK="${APK_PATH}"
+
+        if [[ ! -f "$APK" ]]; then
+          echo "APK missing at $APK" >&2
+          exit 1
+        fi
+
+        TAG="${GITHUB_REF_NAME}"
+        SHORT_SHA="${GITHUB_SHA:0:7}"
+        SAFE_BRANCH="${GITHUB_REF_NAME//\//-}"
+
+        GRADLE_FILE="android/app/build.gradle"
+        if [[ ! -f "$GRADLE_FILE" ]]; then
+          echo "Missing $GRADLE_FILE" >&2
+          exit 1
+        fi
+        VERSION_NAME="$(grep -E 'versionName\s+"' "$GRADLE_FILE" | head -1 | sed -E 's/.*versionName[[:space:]]+"([^"]+)".*/\1/')"
+        if [[ -z "${VERSION_NAME}" ]]; then
+          echo "Could not parse versionName from $GRADLE_FILE" >&2
+          exit 1
+        fi
+
+        if [[ "$MODE" == "debug" ]]; then
+          APK_NAME="mikutoyou-debug-${SHORT_SHA}.apk"
+        elif [[ "$MODE" == "release" ]]; then
+          APK_NAME="mikutoyou-${TAG}.apk"
+        else
+          echo "Invalid build_mode: $MODE (expected debug or release)" >&2
+          exit 1
+        fi
+
+        DEFAULT_FALLBACK_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/app-release.apk"
+
+        if [[ -z "${LOCAL_APK_SSH_HOST:-}" || -z "${LOCAL_APK_SSH_USER:-}" || \
+              -z "${LOCAL_APK_SSH_KEY:-}" || -z "${LOCAL_APK_REMOTE_DIR:-}" || \
+              -z "${LOCAL_APK_BASE_URL:-}" ]]; then
+          if [[ "$MODE" == "release" ]]; then
+            echo "Self-host secrets missing; skip SCP upload and keep fallback release URL."
+            echo "APK_DOWNLOAD_URL=${DEFAULT_FALLBACK_URL}" >> "${GITHUB_ENV}"
+          else
+            echo "LOCAL_APK_* secrets not set; skip SCP (debug APK still in Actions artifacts)."
+          fi
+          exit 0
+        fi
+
+        REMOTE_ROOT="${LOCAL_APK_REMOTE_DIR%/}"
+        if [[ "$MODE" == "debug" ]]; then
+          SUBDIR="${VERSION_NAME}/${SAFE_BRANCH}-${SHORT_SHA}"
+          REMOTE_PATH="${REMOTE_ROOT}/debug/${SUBDIR}"
+          URL_SUFFIX="debug/${SUBDIR}/${APK_NAME}"
+        else
+          REMOTE_PATH="${REMOTE_ROOT}/release/${TAG}"
+          URL_SUFFIX="release/${TAG}/${APK_NAME}"
+        fi
+
+        PORT="${LOCAL_APK_SSH_PORT:-22}"
+        mkdir -p ~/.ssh
+        printf '%s\n' "${LOCAL_APK_SSH_KEY}" > ~/.ssh/id_ed25519
+        chmod 600 ~/.ssh/id_ed25519
+        ssh-keyscan -p "${PORT}" "${LOCAL_APK_SSH_HOST}" >> ~/.ssh/known_hosts
+        ssh -p "${PORT}" "${LOCAL_APK_SSH_USER}@${LOCAL_APK_SSH_HOST}" "mkdir -p '${REMOTE_PATH}'"
+        scp -P "${PORT}" "$APK" "${LOCAL_APK_SSH_USER}@${LOCAL_APK_SSH_HOST}:${REMOTE_PATH}/${APK_NAME}"
+        DOWNLOAD_URL="${LOCAL_APK_BASE_URL%/}/${URL_SUFFIX}"
+
+        if [[ "$MODE" == "release" ]]; then
+          echo "APK_DOWNLOAD_URL=${DOWNLOAD_URL}" >> "${GITHUB_ENV}"
+        fi
+
+        if [[ "$MODE" == "debug" ]]; then
+          {
+            echo "### 自建服务 Debug APK（debug/版本号/分支-提交/）"
+            echo ""
+            echo "**下载**： \`${DOWNLOAD_URL}\`"
+            echo ""
+            echo "**远端路径**： \`${REMOTE_PATH}/${APK_NAME}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
+        else
+          {
+            echo "### 自建服务 Release APK（release/标签/）"
+            echo ""
+            echo "**下载**： \`${DOWNLOAD_URL}\`"
+            echo ""
+            echo "**远端路径**： \`${REMOTE_PATH}/${APK_NAME}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
+        fi

@@ -1,0 +1,87 @@
+# main 推送 / 手动触发：构建 debug APK，上传 artifact，SCP 到自建文件服务根目录。
+# 远端路径：{LOCAL_APK_REMOTE_DIR}/debug/{versionName}/{分支-安全}-{短SHA}/mikutoyou-debug-{短SHA}.apk
+# 例：根目录 /home/<user>/Desktop/shared-downloads，HTTP http://47.94.166.44:6001/ 对应 debug/1.0/...
+# Secrets：LOCAL_APK_SSH_*、LOCAL_APK_REMOTE_DIR、LOCAL_APK_BASE_URL（与 release 相同）。
+name: Android Debug
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+      - name: Build debug
+        run: |
+          cd android
+          ./gradlew assembleDebug
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+      - name: Upload debug APK to self-hosted server
+        uses: ./.github/actions/upload-apk-selfhosted
+        with:
+          build_mode: debug
+          apk_path: android/app/build/outputs/apk/debug/app-debug.apk
+        env:
+          LOCAL_APK_SSH_HOST: ${{ secrets.LOCAL_APK_SSH_HOST }}
+          LOCAL_APK_SSH_PORT: ${{ secrets.LOCAL_APK_SSH_PORT }}
+          LOCAL_APK_SSH_USER: ${{ secrets.LOCAL_APK_SSH_USER }}
+          LOCAL_APK_SSH_KEY: ${{ secrets.LOCAL_APK_SSH_KEY }}
+          LOCAL_APK_REMOTE_DIR: ${{ secrets.LOCAL_APK_REMOTE_DIR }}
+          LOCAL_APK_BASE_URL: ${{ secrets.LOCAL_APK_BASE_URL }}
+      - name: Notify build (success)
+        if: success() && secrets.SMTP_SERVER != '' && secrets.SMTP_USERNAME != '' && secrets.SMTP_PASSWORD != '' && secrets.NOTIFY_EMAIL_TO != '' && secrets.NOTIFY_EMAIL_FROM != ''
+        uses: ./.github/actions/send-build-notification
+        with:
+          notify_outcome: success
+          build_type: debug
+          ref_name: ${{ github.ref_name }}
+          repository: ${{ github.repository }}
+          run_id: ${{ github.run_id }}
+          commit_sha: ${{ github.sha }}
+          artifact_name: app-debug
+        env:
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          NOTIFY_EMAIL_TO: ${{ secrets.NOTIFY_EMAIL_TO }}
+          NOTIFY_EMAIL_FROM: ${{ secrets.NOTIFY_EMAIL_FROM }}
+      - name: Notify build (failure)
+        if: failure() && secrets.SMTP_SERVER != '' && secrets.SMTP_USERNAME != '' && secrets.SMTP_PASSWORD != '' && secrets.NOTIFY_EMAIL_TO != '' && secrets.NOTIFY_EMAIL_FROM != ''
+        uses: ./.github/actions/send-build-notification
+        with:
+          notify_outcome: failure
+          build_type: debug
+          ref_name: ${{ github.ref_name }}
+          repository: ${{ github.repository }}
+          run_id: ${{ github.run_id }}
+          commit_sha: ${{ github.sha }}
+          artifact_name: app-debug
+        env:
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          NOTIFY_EMAIL_TO: ${{ secrets.NOTIFY_EMAIL_TO }}
+          NOTIFY_EMAIL_FROM: ${{ secrets.NOTIFY_EMAIL_FROM }}

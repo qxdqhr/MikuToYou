@@ -1,0 +1,91 @@
+name: Send Android build notification
+description: >
+  Debug / Release 构建成功或失败时的 SMTP 通知（需在调用 step 上配置 SMTP_* / NOTIFY_* env，并配合 workflow 的 if 条件）。
+
+inputs:
+  notify_outcome:
+    description: success 或 failure
+    required: true
+  build_type:
+    description: debug 或 release
+    required: true
+  ref_name:
+    description: 通常为 github.ref_name
+    required: true
+  repository:
+    description: owner/repo，通常为 github.repository
+    required: true
+  run_id:
+    description: 通常为 github.run_id
+    required: true
+  commit_sha:
+    description: 通常为 github.sha（用于 debug 邮件等）
+    required: false
+    default: ''
+  artifact_name:
+    description: debug 构建的 artifact 名称，可选
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Send success email (release)
+      if: inputs.notify_outcome == 'success' && inputs.build_type == 'release'
+      uses: dawidd6/action-send-mail@v3
+      with:
+        server_address: ${{ env.SMTP_SERVER }}
+        server_port: ${{ env.SMTP_PORT }}
+        secure: true
+        username: ${{ env.SMTP_USERNAME }}
+        password: ${{ env.SMTP_PASSWORD }}
+        subject: ${{ format('[MikuToYou] APK 打包成功 {0}', inputs.ref_name) }}
+        to: ${{ env.NOTIFY_EMAIL_TO }}
+        from: ${{ env.NOTIFY_EMAIL_FROM }}
+        body: |
+          APK 打包成功。
+
+          Tag: ${{ inputs.ref_name }}
+          下载地址: ${{ env.APK_DOWNLOAD_URL }}
+          Release 页面: https://github.com/${{ inputs.repository }}/releases/tag/${{ inputs.ref_name }}
+
+    - name: Send success email (debug)
+      if: inputs.notify_outcome == 'success' && inputs.build_type == 'debug'
+      uses: dawidd6/action-send-mail@v3
+      with:
+        server_address: ${{ env.SMTP_SERVER }}
+        server_port: ${{ env.SMTP_PORT }}
+        secure: true
+        username: ${{ env.SMTP_USERNAME }}
+        password: ${{ env.SMTP_PASSWORD }}
+        subject: ${{ format('[MikuToYou] Debug APK 构建成功 {0}', inputs.ref_name) }}
+        to: ${{ env.NOTIFY_EMAIL_TO }}
+        from: ${{ env.NOTIFY_EMAIL_FROM }}
+        body: |
+          Debug APK 构建成功。
+
+          引用: ${{ inputs.ref_name }}
+          提交: ${{ inputs.commit_sha }}
+          构建运行: https://github.com/${{ inputs.repository }}/actions/runs/${{ inputs.run_id }}
+
+          Artifact 名称: ${{ inputs.artifact_name }}（见本运行 Artifacts）
+
+    - name: Send failure email
+      if: inputs.notify_outcome == 'failure'
+      uses: dawidd6/action-send-mail@v3
+      with:
+        server_address: ${{ env.SMTP_SERVER }}
+        server_port: ${{ env.SMTP_PORT }}
+        secure: true
+        username: ${{ env.SMTP_USERNAME }}
+        password: ${{ env.SMTP_PASSWORD }}
+        subject: ${{ format('[MikuToYou] APK 打包失败 {0}', inputs.ref_name) }}
+        to: ${{ env.NOTIFY_EMAIL_TO }}
+        from: ${{ env.NOTIFY_EMAIL_FROM }}
+        body: |
+          APK 打包失败，请查看 Actions 日志。
+
+          构建类型: ${{ inputs.build_type }}
+          引用: ${{ inputs.ref_name }}
+          提交: ${{ inputs.commit_sha }}
+          日志入口: https://github.com/${{ inputs.repository }}/actions/runs/${{ inputs.run_id }}
