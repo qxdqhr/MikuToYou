@@ -1,7 +1,7 @@
 # Release：打 tag v* 触发。构建在 GitHub runner；若需落到本机/服务器 fileshare，须配置 Secrets 并由 SCP 推送（见 upload-apk-selfhosted）。
 # 自建文件服务需配置 GitHub Secrets：
 #   LOCAL_APK_SSH_HOST      例 47.94.166.44
-#   LOCAL_APK_SSH_PORT      可选，默认 22
+#   LOCAL_APK_SSH_PORT      可选，默认 22；frp tcp 穿透 SSH 时填 remotePort（如 6022），勿填 frps bind_port
 #   LOCAL_APK_SSH_USER      SSH 用户
 #   LOCAL_APK_SSH_KEY       私钥全文（ed25519 等）
 #   LOCAL_APK_REMOTE_DIR    HTTP 根目录在机器上的绝对路径，例 /home/qhr/Desktop/shared-downloads
