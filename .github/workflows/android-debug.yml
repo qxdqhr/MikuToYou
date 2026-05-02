@@ -12,6 +12,14 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # steps.if 不允许使用 secrets 上下文；经 job env 中转后可用 env 判断
+    env:
+      SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      NOTIFY_EMAIL_TO: ${{ secrets.NOTIFY_EMAIL_TO }}
+      NOTIFY_EMAIL_FROM: ${{ secrets.NOTIFY_EMAIL_FROM }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -50,7 +58,7 @@ jobs:
           LOCAL_APK_REMOTE_DIR: ${{ secrets.LOCAL_APK_REMOTE_DIR }}
           LOCAL_APK_BASE_URL: ${{ secrets.LOCAL_APK_BASE_URL }}
       - name: Notify build (success)
-        if: success() && secrets.SMTP_SERVER != '' && secrets.SMTP_USERNAME != '' && secrets.SMTP_PASSWORD != '' && secrets.NOTIFY_EMAIL_TO != '' && secrets.NOTIFY_EMAIL_FROM != ''
+        if: success() && env.SMTP_SERVER != '' && env.SMTP_USERNAME != '' && env.SMTP_PASSWORD != '' && env.NOTIFY_EMAIL_TO != '' && env.NOTIFY_EMAIL_FROM != ''
         uses: ./.github/actions/send-build-notification
         with:
           notify_outcome: success
@@ -60,15 +68,8 @@ jobs:
           run_id: ${{ github.run_id }}
           commit_sha: ${{ github.sha }}
           artifact_name: app-debug
-        env:
-          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
-          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
-          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-          NOTIFY_EMAIL_TO: ${{ secrets.NOTIFY_EMAIL_TO }}
-          NOTIFY_EMAIL_FROM: ${{ secrets.NOTIFY_EMAIL_FROM }}
       - name: Notify build (failure)
-        if: failure() && secrets.SMTP_SERVER != '' && secrets.SMTP_USERNAME != '' && secrets.SMTP_PASSWORD != '' && secrets.NOTIFY_EMAIL_TO != '' && secrets.NOTIFY_EMAIL_FROM != ''
+        if: failure() && env.SMTP_SERVER != '' && env.SMTP_USERNAME != '' && env.SMTP_PASSWORD != '' && env.NOTIFY_EMAIL_TO != '' && env.NOTIFY_EMAIL_FROM != ''
         uses: ./.github/actions/send-build-notification
         with:
           notify_outcome: failure
@@ -78,10 +79,3 @@ jobs:
           run_id: ${{ github.run_id }}
           commit_sha: ${{ github.sha }}
           artifact_name: app-debug
-        env:
-          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
-          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
-          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-          NOTIFY_EMAIL_TO: ${{ secrets.NOTIFY_EMAIL_TO }}
-          NOTIFY_EMAIL_FROM: ${{ secrets.NOTIFY_EMAIL_FROM }}

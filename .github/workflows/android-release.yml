@@ -19,6 +19,14 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    # steps.if 不允许使用 secrets 上下文；经 job env 中转后可用 env 判断
+    env:
+      SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      NOTIFY_EMAIL_TO: ${{ secrets.NOTIFY_EMAIL_TO }}
+      NOTIFY_EMAIL_FROM: ${{ secrets.NOTIFY_EMAIL_FROM }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -79,7 +87,7 @@ jobs:
           name: Release ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
       - name: Notify build (success)
-        if: success() && startsWith(github.ref, 'refs/tags/') && secrets.SMTP_SERVER != '' && secrets.SMTP_USERNAME != '' && secrets.SMTP_PASSWORD != '' && secrets.NOTIFY_EMAIL_TO != '' && secrets.NOTIFY_EMAIL_FROM != ''
+        if: success() && startsWith(github.ref, 'refs/tags/') && env.SMTP_SERVER != '' && env.SMTP_USERNAME != '' && env.SMTP_PASSWORD != '' && env.NOTIFY_EMAIL_TO != '' && env.NOTIFY_EMAIL_FROM != ''
         uses: ./.github/actions/send-build-notification
         with:
           notify_outcome: success
@@ -88,15 +96,8 @@ jobs:
           repository: ${{ github.repository }}
           run_id: ${{ github.run_id }}
           commit_sha: ${{ github.sha }}
-        env:
-          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
-          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
-          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-          NOTIFY_EMAIL_TO: ${{ secrets.NOTIFY_EMAIL_TO }}
-          NOTIFY_EMAIL_FROM: ${{ secrets.NOTIFY_EMAIL_FROM }}
       - name: Notify build (failure)
-        if: failure() && startsWith(github.ref, 'refs/tags/') && secrets.SMTP_SERVER != '' && secrets.SMTP_USERNAME != '' && secrets.SMTP_PASSWORD != '' && secrets.NOTIFY_EMAIL_TO != '' && secrets.NOTIFY_EMAIL_FROM != ''
+        if: failure() && startsWith(github.ref, 'refs/tags/') && env.SMTP_SERVER != '' && env.SMTP_USERNAME != '' && env.SMTP_PASSWORD != '' && env.NOTIFY_EMAIL_TO != '' && env.NOTIFY_EMAIL_FROM != ''
         uses: ./.github/actions/send-build-notification
         with:
           notify_outcome: failure
@@ -105,10 +106,3 @@ jobs:
           repository: ${{ github.repository }}
           run_id: ${{ github.run_id }}
           commit_sha: ${{ github.sha }}
-        env:
-          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
-          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
-          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-          NOTIFY_EMAIL_TO: ${{ secrets.NOTIFY_EMAIL_TO }}
-          NOTIFY_EMAIL_FROM: ${{ secrets.NOTIFY_EMAIL_FROM }}
