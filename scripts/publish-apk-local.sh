@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # 将本机构建的 APK 复制到本地文件服务目录（与 CI upload-apk-selfhosted 路径规则一致）。
 # Debug:  {ROOT}/debug/{versionName}/{branch}-{shortSha}/mikutoyou-debug-{shortSha}.apk
+#         并同步 {ROOT}/debug/latest/mikutoyou-debug.apk
 # Release:{ROOT}/release/{tag}/mikutoyou-{tag}.apk
+#         并同步 {ROOT}/release/latest/mikutoyou-release.apk
 #
 # 用法:
 #   ./scripts/publish-apk-local.sh debug
@@ -57,10 +59,22 @@ fi
 
 mkdir -p "$DEST_DIR"
 cp -f "$SRC" "${DEST_DIR}/${DEST_NAME}"
+if [[ "$MODE" == "debug" ]]; then
+  LATEST_DIR="${ROOT}/debug/latest"
+  LATEST_NAME="mikutoyou-debug.apk"
+else
+  LATEST_DIR="${ROOT}/release/latest"
+  LATEST_NAME="mikutoyou-release.apk"
+fi
+mkdir -p "$LATEST_DIR"
+cp -f "${DEST_DIR}/${DEST_NAME}" "${LATEST_DIR}/${LATEST_NAME}"
 echo "已发布: ${DEST_DIR}/${DEST_NAME}"
+echo "最新固定路径: ${LATEST_DIR}/${LATEST_NAME}"
 echo "HTTP 示例根: http://47.94.166.44:6001/"
 if [[ "$MODE" == "debug" ]]; then
   echo "相对路径: debug/${VERSION_NAME}/${SAFE_BRANCH}-${SHORT_SHA}/${DEST_NAME}"
+  echo "最新 URL: debug/latest/${LATEST_NAME}"
 else
   echo "相对路径: release/${TAG}/${DEST_NAME}"
+  echo "最新 URL: release/latest/${LATEST_NAME}"
 fi

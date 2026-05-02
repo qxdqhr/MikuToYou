@@ -5,7 +5,9 @@
 #   LOCAL_APK_SSH_KEY       私钥全文（ed25519 等）
 #   LOCAL_APK_REMOTE_DIR    HTTP 根目录在机器上的绝对路径，例 /home/qhr/Desktop/shared-downloads
 #   LOCAL_APK_BASE_URL      公网访问根，例 http://47.94.166.44:6001（勿尾斜杠亦可）
-# 远端路径：{LOCAL_APK_REMOTE_DIR}/release/{tag}/mikutoyou-{tag}.apk
+# 归档路径：{LOCAL_APK_REMOTE_DIR}/release/{tag}/mikutoyou-{tag}.apk
+# 固定「最新」：{LOCAL_APK_REMOTE_DIR}/release/latest/mikutoyou-release.apk（每次覆盖）
+# HTTP 示例：http://47.94.166.44:6001/release/latest/mikutoyou-release.apk
 name: Android Release Asset
 
 on:

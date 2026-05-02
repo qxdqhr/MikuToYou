@@ -61,6 +61,14 @@ runs:
         if [[ -z "${LOCAL_APK_SSH_HOST:-}" || -z "${LOCAL_APK_SSH_USER:-}" || \
               -z "${LOCAL_APK_SSH_KEY:-}" || -z "${LOCAL_APK_REMOTE_DIR:-}" || \
               -z "${LOCAL_APK_BASE_URL:-}" ]]; then
+          echo '::warning::LOCAL_APK_* secrets 未配置，已跳过 SCP；自建目录不会出现新包。请在仓库 Settings → Secrets 中填写 LOCAL_APK_SSH_HOST / USER / KEY / REMOTE_DIR / BASE_URL。'
+          {
+            echo '## 自建 APK 上传 — 已跳过'
+            echo ''
+            echo '未检测到完整的 `LOCAL_APK_*` Secrets，未执行 SSH/SCP。Debug 包仍可在本 run 的 **Artifacts** 中下载。'
+            echo ''
+            echo '请在 GitHub 仓库 **Settings → Secrets and variables → Actions** 配置：`LOCAL_APK_SSH_HOST`、`LOCAL_APK_SSH_USER`、`LOCAL_APK_SSH_KEY`、`LOCAL_APK_REMOTE_DIR`、`LOCAL_APK_BASE_URL`（可选 `LOCAL_APK_SSH_PORT`）。'
+          } >> "${GITHUB_STEP_SUMMARY}"
           if [[ "$MODE" == "release" ]]; then
             echo "Self-host secrets missing; skip SCP upload and keep fallback release URL."
             echo "APK_DOWNLOAD_URL=${DEFAULT_FALLBACK_URL}" >> "${GITHUB_ENV}"
@@ -89,24 +97,41 @@ runs:
         scp -P "${PORT}" "$APK" "${LOCAL_APK_SSH_USER}@${LOCAL_APK_SSH_HOST}:${REMOTE_PATH}/${APK_NAME}"
         DOWNLOAD_URL="${LOCAL_APK_BASE_URL%/}/${URL_SUFFIX}"
 
+        # 固定「最新」路径，便于反代根目录直达（不依赖版本号/SHA 子目录）。
+        if [[ "$MODE" == "debug" ]]; then
+          LATEST_DIR="${REMOTE_ROOT}/debug/latest"
+          LATEST_NAME="mikutoyou-debug.apk"
+          LATEST_URL="${LOCAL_APK_BASE_URL%/}/debug/latest/${LATEST_NAME}"
+        else
+          LATEST_DIR="${REMOTE_ROOT}/release/latest"
+          LATEST_NAME="mikutoyou-release.apk"
+          LATEST_URL="${LOCAL_APK_BASE_URL%/}/release/latest/${LATEST_NAME}"
+        fi
+        ssh -p "${PORT}" "${LOCAL_APK_SSH_USER}@${LOCAL_APK_SSH_HOST}" \
+          "mkdir -p '${LATEST_DIR}' && cp -f '${REMOTE_PATH}/${APK_NAME}' '${LATEST_DIR}/${LATEST_NAME}'"
+
         if [[ "$MODE" == "release" ]]; then
           echo "APK_DOWNLOAD_URL=${DOWNLOAD_URL}" >> "${GITHUB_ENV}"
         fi
 
         if [[ "$MODE" == "debug" ]]; then
           {
-            echo "### 自建服务 Debug APK（debug/版本号/分支-提交/）"
+            echo "### 自建服务 Debug APK"
             echo ""
-            echo "**下载**： \`${DOWNLOAD_URL}\`"
+            echo "**本次构建（按版本/分支归档）**： \`${DOWNLOAD_URL}\`"
             echo ""
-            echo "**远端路径**： \`${REMOTE_PATH}/${APK_NAME}\`"
+            echo "**固定「最新」Debug（覆盖写入）**： \`${LATEST_URL}\`"
+            echo ""
+            echo "**远端路径**： \`${REMOTE_PATH}/${APK_NAME}\` → \`${LATEST_DIR}/${LATEST_NAME}\`"
           } >> "${GITHUB_STEP_SUMMARY}"
         else
           {
-            echo "### 自建服务 Release APK（release/标签/）"
+            echo "### 自建服务 Release APK"
             echo ""
-            echo "**下载**： \`${DOWNLOAD_URL}\`"
+            echo "**本次标签**： \`${DOWNLOAD_URL}\`"
             echo ""
-            echo "**远端路径**： \`${REMOTE_PATH}/${APK_NAME}\`"
+            echo "**固定「最新」Release（覆盖写入）**： \`${LATEST_URL}\`"
+            echo ""
+            echo "**远端路径**： \`${REMOTE_PATH}/${APK_NAME}\` → \`${LATEST_DIR}/${LATEST_NAME}\`"
           } >> "${GITHUB_STEP_SUMMARY}"
         fi
