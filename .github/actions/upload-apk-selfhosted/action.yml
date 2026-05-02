@@ -1,9 +1,11 @@
 name: Upload APK to self-hosted
 description: >
-  将 debug / release APK SCP 到自建文件服务根目录（LOCAL_APK_REMOTE_DIR，应对 HTTP 根目录）。
+  GitHub Actions 在云端临时 runner 上打包；APK 先只存在于该 runner。本 action 通过 SSH/SCP 推到你配置的机器上的 LOCAL_APK_REMOTE_DIR
+  （例如服务器上与 Nginx/反代 root 一致的绝对路径，如桌面的 fileshare）。不会写入 Git 仓库。
+  勿将 LOCAL_APK_SSH_HOST 设为 127.0.0.1（从 runner 看那是虚拟机自身，不是你的桌面）。
   目录规则（与 scripts/publish-apk-local.sh 一致）：
-  - Debug: {REMOTE}/debug/{versionName}/{branch}-{shortSha}/mikutoyou-debug-{shortSha}.apk
-  - Release: {REMOTE}/release/{tag}/mikutoyou-{tag}.apk
+  - Debug: REMOTE/debug/versionName/branch-shortSha/mikutoyou-debug-SHA.apk
+  - Release: REMOTE/release/tag/mikutoyou-tag.apk
   versionName 从 android/app/build.gradle 解析。需在调用 step 的 env 中传入 LOCAL_APK_* secrets。
 
 inputs:
@@ -65,9 +67,11 @@ runs:
           {
             echo '## 自建 APK 上传 — 已跳过'
             echo ''
-            echo '未检测到完整的 `LOCAL_APK_*` Secrets，未执行 SSH/SCP。Debug 包仍可在本 run 的 **Artifacts** 中下载。'
+            echo '**说明**：打包在 **GitHub 托管 runner（临时虚拟机）** 上完成；若不执行本步 SCP，APK **只会**留在该虚拟机直至 job 结束，或作为 **Actions Artifacts** 在网页上下载，**不会**出现在你桌面的 fileshare 目录。'
             echo ''
-            echo '请在 GitHub 仓库 **Settings → Secrets and variables → Actions** 配置：`LOCAL_APK_SSH_HOST`、`LOCAL_APK_SSH_USER`、`LOCAL_APK_SSH_KEY`、`LOCAL_APK_REMOTE_DIR`、`LOCAL_APK_BASE_URL`（可选 `LOCAL_APK_SSH_PORT`）。'
+            echo '未检测到完整的 `LOCAL_APK_*` Secrets，未执行 SSH/SCP。'
+            echo ''
+            echo '请在仓库 **Settings → Secrets and variables → Actions** 配置：`LOCAL_APK_SSH_HOST`（能从公网 SSH 到的地址，**不要**填 `127.0.0.1`）、`LOCAL_APK_SSH_USER`、`LOCAL_APK_SSH_KEY`、`LOCAL_APK_REMOTE_DIR`（**目标机器上**与 HTTP 根一致的绝对路径）、`LOCAL_APK_BASE_URL`（可选 `LOCAL_APK_SSH_PORT`）。'
           } >> "${GITHUB_STEP_SUMMARY}"
           if [[ "$MODE" == "release" ]]; then
             echo "Self-host secrets missing; skip SCP upload and keep fallback release URL."
@@ -89,6 +93,13 @@ runs:
         fi
 
         PORT="${LOCAL_APK_SSH_PORT:-22}"
+        echo "== 自建上传说明 =="
+        echo "APK 当前在 GitHub runner 的临时目录；下面通过 SCP 推送到 **你的机器**（SSH 目标），写入磁盘路径："
+        echo "  ${LOCAL_APK_SSH_USER}@${LOCAL_APK_SSH_HOST}:${REMOTE_PATH}/"
+        echo "（LOCAL_APK_REMOTE_DIR 即你在 Secrets 里配置的、应与反代 root 一致的本机/服务器目录）"
+        if [[ "${LOCAL_APK_SSH_HOST}" == "127.0.0.1" || "${LOCAL_APK_SSH_HOST}" == "localhost" ]]; then
+          echo '::warning::LOCAL_APK_SSH_HOST 为 127.0.0.1/localhost 时，从 GitHub runner 连接的是 **runner 自己**，不是你的桌面。请改为公网可达的主机名或 IP（例如云服务器 IP）。'
+        fi
         mkdir -p ~/.ssh
         printf '%s\n' "${LOCAL_APK_SSH_KEY}" > ~/.ssh/id_ed25519
         chmod 600 ~/.ssh/id_ed25519
@@ -118,6 +129,8 @@ runs:
           {
             echo "### 自建服务 Debug APK"
             echo ""
+            echo "文件已写入 **SSH 目标机** 磁盘：\`${REMOTE_PATH}/\`（与 GitHub runner 无关）。"
+            echo ""
             echo "**本次构建（按版本/分支归档）**： \`${DOWNLOAD_URL}\`"
             echo ""
             echo "**固定「最新」Debug（覆盖写入）**： \`${LATEST_URL}\`"
@@ -127,6 +140,8 @@ runs:
         else
           {
             echo "### 自建服务 Release APK"
+            echo ""
+            echo "文件已写入 **SSH 目标机** 磁盘：\`${REMOTE_PATH}/\`（与 GitHub runner 无关）。"
             echo ""
             echo "**本次标签**： \`${DOWNLOAD_URL}\`"
             echo ""

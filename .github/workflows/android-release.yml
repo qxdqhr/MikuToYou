@@ -1,4 +1,5 @@
-# Release：打 tag v* 触发。自建文件服务需配置 GitHub Secrets：
+# Release：打 tag v* 触发。构建在 GitHub runner；若需落到本机/服务器 fileshare，须配置 Secrets 并由 SCP 推送（见 upload-apk-selfhosted）。
+# 自建文件服务需配置 GitHub Secrets：
 #   LOCAL_APK_SSH_HOST      例 47.94.166.44
 #   LOCAL_APK_SSH_PORT      可选，默认 22
 #   LOCAL_APK_SSH_USER      SSH 用户
