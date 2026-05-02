@@ -3,6 +3,7 @@ description: >
   GitHub Actions 在云端临时 runner 上打包；APK 先只存在于该 runner。本 action 通过 SSH（exec + 远端 cat，不依赖 scp/sftp）推到你配置的机器上的 LOCAL_APK_REMOTE_DIR
   （例如服务器上与 Nginx/反代 root 一致的绝对路径，如桌面的 fileshare）。不会写入 Git 仓库。
   勿将 LOCAL_APK_SSH_HOST 设为 127.0.0.1（从 runner 看那是虚拟机自身，不是你的桌面）。
+  若用 frp：LOCAL_APK_SSH_PORT 须为「tcp 代理到本机 sshd 的 remotePort」，勿填 frps 的 bind_port（控制口）。
   目录规则（与 scripts/publish-apk-local.sh 一致）：
   - Debug: REMOTE/debug/versionName/branch-shortSha/mikutoyou-debug-SHA.apk
   - Release: REMOTE/release/tag/mikutoyou-tag.apk

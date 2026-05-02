@@ -1,0 +1,21 @@
+# 合并到本机 frpc 主配置（与 frps 使用相同 major 版本的 frp）。
+#
+# 背景：frps 的 bind_port（你当前为 6000）只用于 frpc ↔ frps 的控制连接，
+# 不能作为 GitHub Actions 的 SSH 目标端口。需另开 TCP 代理把公网端口转到本机 sshd。
+#
+# 步骤概要：
+# 1) 将下方 [[proxies]] 整块追加到 frpc.toml（不要与现有 proxy 的 name 重复）。
+# 2) 确认 frpc 顶层 serverAddr / serverPort / auth.token 与 frps 一致（serverPort 必须等于 frps 的 bind_port，例如 6000）。
+# 3) 在 frps 配置中放行 remotePort（见同目录 frps-allow-ssh-port.snippet.toml）。
+# 4) 云安全组放行 TCP 6022（若你改了 remotePort，则放行对应端口）。
+# 5) 本机 sshd 监听 22 且允许 127.0.0.1 登录（或把 localPort 改成你的 SSH 端口）。
+# 6) 仓库 Secret：LOCAL_APK_SSH_PORT 与 remotePort 相同（已由维护者同步为 6022）。
+#
+# 合并后重启 frpc：sudo systemctl restart frpc   （服务名以你机器为准）
+
+[[proxies]]
+name = "ssh_github_actions"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 22
+remotePort = 6022

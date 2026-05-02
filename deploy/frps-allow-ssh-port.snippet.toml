@@ -1,0 +1,10 @@
+# 合并到阿里云上 frps 主配置（frps.toml）。
+# 允许 frpc 注册 TCP 代理端口 6022，与 frpc-ssh-github-actions.snippet.toml 中的 remotePort 一致。
+#
+# 若 frps 已存在 allowPorts，请把下面这一段里的对象合并进现有数组，不要重复定义顶层键名。
+#
+# 改完后：在服务器上执行 frps 配置检查与 reload（命令随安装方式而异），并放行云安全组 TCP 6022。
+
+allowPorts = [
+  { start = 6022, end = 6022 },
+]
