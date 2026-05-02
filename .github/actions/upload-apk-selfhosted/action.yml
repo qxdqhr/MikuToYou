@@ -105,8 +105,13 @@ runs:
         # Secret 若从网页粘贴易带 CRLF，会导致私钥无效；仅用于本 job 的临时文件
         printf '%s\n' "${LOCAL_APK_SSH_KEY}" | tr -d '\r' > "${KEY_FILE}"
         chmod 600 "${KEY_FILE}"
+        if ! ssh-keygen -y -f "${KEY_FILE}" >/dev/null 2>&1; then
+          echo '::error::LOCAL_APK_SSH_KEY 不是有效 OpenSSH 私钥。请用「完整文件」重设 Secret：gh secret set LOCAL_APK_SSH_KEY -R <owner>/<repo> < path/to/id_ed25519'
+          exit 1
+        fi
+        echo "用于 SCP 的公钥指纹（须出现在服务器 ${LOCAL_APK_SSH_USER} 的 ~/.ssh/authorized_keys 中）: $(ssh-keygen -lf "${KEY_FILE}" | awk '{print $2, $3}')"
         ssh-keyscan -p "${PORT}" "${LOCAL_APK_SSH_HOST}" >> ~/.ssh/known_hosts
-        SSH_OPTS=(-i "${KEY_FILE}" -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=30)
+        SSH_OPTS=(-i "${KEY_FILE}" -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=30 -o PreferredAuthentications=publickey)
         ssh "${SSH_OPTS[@]}" -p "${PORT}" "${LOCAL_APK_SSH_USER}@${LOCAL_APK_SSH_HOST}" "mkdir -p '${REMOTE_PATH}'"
         scp "${SSH_OPTS[@]}" -P "${PORT}" "$APK" "${LOCAL_APK_SSH_USER}@${LOCAL_APK_SSH_HOST}:${REMOTE_PATH}/${APK_NAME}"
         DOWNLOAD_URL="${LOCAL_APK_BASE_URL%/}/${URL_SUFFIX}"
