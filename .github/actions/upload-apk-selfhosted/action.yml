@@ -1,6 +1,6 @@
 name: Upload APK to self-hosted
 description: >
-  GitHub Actions 在云端临时 runner 上打包；APK 先只存在于该 runner。本 action 通过 SSH/SCP 推到你配置的机器上的 LOCAL_APK_REMOTE_DIR
+  GitHub Actions 在云端临时 runner 上打包；APK 先只存在于该 runner。本 action 通过 SSH（exec + 远端 cat，不依赖 scp/sftp）推到你配置的机器上的 LOCAL_APK_REMOTE_DIR
   （例如服务器上与 Nginx/反代 root 一致的绝对路径，如桌面的 fileshare）。不会写入 Git 仓库。
   勿将 LOCAL_APK_SSH_HOST 设为 127.0.0.1（从 runner 看那是虚拟机自身，不是你的桌面）。
   目录规则（与 scripts/publish-apk-local.sh 一致）：
@@ -19,7 +19,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: SCP to self-hosted
+    - name: Upload APK over SSH (stdin cat, no scp)
       shell: bash
       env:
         BUILD_MODE: ${{ inputs.build_mode }}
@@ -63,21 +63,21 @@ runs:
         if [[ -z "${LOCAL_APK_SSH_HOST:-}" || -z "${LOCAL_APK_SSH_USER:-}" || \
               -z "${LOCAL_APK_SSH_KEY:-}" || -z "${LOCAL_APK_REMOTE_DIR:-}" || \
               -z "${LOCAL_APK_BASE_URL:-}" ]]; then
-          echo '::warning::LOCAL_APK_* secrets 未配置，已跳过 SCP；自建目录不会出现新包。请在仓库 Settings → Secrets 中填写 LOCAL_APK_SSH_HOST / USER / KEY / REMOTE_DIR / BASE_URL。'
+          echo '::warning::LOCAL_APK_* secrets 未配置，已跳过自建上传；自建目录不会出现新包。请在仓库 Settings → Secrets 中填写 LOCAL_APK_SSH_HOST / USER / KEY / REMOTE_DIR / BASE_URL。'
           {
             echo '## 自建 APK 上传 — 已跳过'
             echo ''
-            echo '**说明**：打包在 **GitHub 托管 runner（临时虚拟机）** 上完成；若不执行本步 SCP，APK **只会**留在该虚拟机直至 job 结束，或作为 **Actions Artifacts** 在网页上下载，**不会**出现在你桌面的 fileshare 目录。'
+            echo '**说明**：打包在 **GitHub 托管 runner（临时虚拟机）** 上完成；若不执行本步自建上传，APK **只会**留在该虚拟机直至 job 结束，或作为 **Actions Artifacts** 在网页上下载，**不会**出现在你桌面的 fileshare 目录。'
             echo ''
-            echo '未检测到完整的 `LOCAL_APK_*` Secrets，未执行 SSH/SCP。'
+            echo '未检测到完整的 `LOCAL_APK_*` Secrets，未执行 SSH 上传。'
             echo ''
             echo '请在仓库 **Settings → Secrets and variables → Actions** 配置：`LOCAL_APK_SSH_HOST`（能从公网 SSH 到的地址，**不要**填 `127.0.0.1`）、`LOCAL_APK_SSH_USER`、`LOCAL_APK_SSH_KEY`、`LOCAL_APK_REMOTE_DIR`（**目标机器上**与 HTTP 根一致的绝对路径）、`LOCAL_APK_BASE_URL`（可选 `LOCAL_APK_SSH_PORT`）。'
           } >> "${GITHUB_STEP_SUMMARY}"
           if [[ "$MODE" == "release" ]]; then
-            echo "Self-host secrets missing; skip SCP upload and keep fallback release URL."
+            echo "Self-host secrets missing; skip SSH upload and keep fallback release URL."
             echo "APK_DOWNLOAD_URL=${DEFAULT_FALLBACK_URL}" >> "${GITHUB_ENV}"
           else
-            echo "LOCAL_APK_* secrets not set; skip SCP (debug APK still in Actions artifacts)."
+            echo "LOCAL_APK_* secrets not set; skip SSH upload (debug APK still in Actions artifacts)."
           fi
           exit 0
         fi
@@ -94,7 +94,7 @@ runs:
 
         PORT="${LOCAL_APK_SSH_PORT:-22}"
         echo "== 自建上传说明 =="
-        echo "APK 当前在 GitHub runner 的临时目录；下面通过 SCP 推送到 **你的机器**（SSH 目标），写入磁盘路径："
+        echo "APK 当前在 GitHub runner 的临时目录；下面通过 SSH 流传输到 **你的机器**（SSH 目标），写入磁盘路径："
         echo "  ${LOCAL_APK_SSH_USER}@${LOCAL_APK_SSH_HOST}:${REMOTE_PATH}/"
         echo "（LOCAL_APK_REMOTE_DIR 即你在 Secrets 里配置的、应与反代 root 一致的本机/服务器目录）"
         if [[ "${LOCAL_APK_SSH_HOST}" == "127.0.0.1" || "${LOCAL_APK_SSH_HOST}" == "localhost" ]]; then
@@ -109,10 +109,10 @@ runs:
           echo '::error::LOCAL_APK_SSH_KEY 不是有效 OpenSSH 私钥。请用「完整文件」重设 Secret：gh secret set LOCAL_APK_SSH_KEY -R <owner>/<repo> < path/to/id_ed25519'
           exit 1
         fi
-        echo "用于 SCP 的公钥指纹（须出现在服务器 ${LOCAL_APK_SSH_USER} 的 ~/.ssh/authorized_keys 中）: $(ssh-keygen -lf "${KEY_FILE}" | awk '{print $2, $3}')"
+        echo "用于 SSH 上传的公钥指纹（须出现在服务器 ${LOCAL_APK_SSH_USER} 的 ~/.ssh/authorized_keys 中）: $(ssh-keygen -lf "${KEY_FILE}" | awk '{print $2, $3}')"
         ssh-keyscan -p "${PORT}" "${LOCAL_APK_SSH_HOST}" >> ~/.ssh/known_hosts
-        # IPQoS=none：部分路由器对 SSH 默认 DSCP 处理异常会导致握手后被掐断
-        # scp 使用 -O：OpenSSH 9+ 默认走 SFTP 子系统；若 sshd 未启用 Subsystem sftp，会出现 Connection closed
+        # IPQoS=none：部分路由器对默认 DSCP 处理异常会导致握手后被掐断
+        # 不用 scp/sftp：反代、精简 sshd、无 Subsystem sftp 时 scp 常出现 Connection closed；改为 stdin 经 exec 通道 cat 到远端（仅依赖 shell+cat）
         SSH_OPTS=(
           -i "${KEY_FILE}"
           -o IdentitiesOnly=yes
@@ -124,8 +124,9 @@ runs:
           -o ServerAliveInterval=15
           -o ServerAliveCountMax=4
         )
-        ssh "${SSH_OPTS[@]}" -p "${PORT}" "${LOCAL_APK_SSH_USER}@${LOCAL_APK_SSH_HOST}" "mkdir -p '${REMOTE_PATH}'"
-        scp -O "${SSH_OPTS[@]}" -P "${PORT}" "$APK" "${LOCAL_APK_SSH_USER}@${LOCAL_APK_SSH_HOST}:${REMOTE_PATH}/${APK_NAME}"
+        UPLOADING="${REMOTE_PATH}/${APK_NAME}.uploading"
+        ssh "${SSH_OPTS[@]}" -p "${PORT}" "${LOCAL_APK_SSH_USER}@${LOCAL_APK_SSH_HOST}" \
+          "mkdir -p '${REMOTE_PATH}' && cat > '${UPLOADING}' && mv -f '${UPLOADING}' '${REMOTE_PATH}/${APK_NAME}'" < "$APK"
         DOWNLOAD_URL="${LOCAL_APK_BASE_URL%/}/${URL_SUFFIX}"
 
         # 固定「最新」路径，便于反代根目录直达（不依赖版本号/SHA 子目录）。
