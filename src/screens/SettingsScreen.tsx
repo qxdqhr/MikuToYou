@@ -11,21 +11,27 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TopBar } from '../components/layout/TopBar';
-import { DEMO_MODEL3_URL } from '../components/chat/live2dViewer';
+import {
+  DEFAULT_LIVE2D_MODEL3_JSON_URL,
+  DEFAULT_LLM_API_BASE_URL,
+  DEFAULT_LLM_MODEL,
+} from '../constants/integrationDefaults';
 import { RELEASE_TAG } from '../constants/releaseTag';
 import { testConnection } from '../services/llmClient';
 import { useApp } from '../state/AppContext';
 import type { AppSettings } from '../types/settings';
-import { defaultAppSettings } from '../types/settings';
+import { defaultAppSettings, integrationTestPreset } from '../types/settings';
 import { colors, radius, space } from '../theme/tokens';
 
 const APP_VERSION = RELEASE_TAG;
+
+type SubPage = 'settings' | 'about' | 'llm' | 'live2d';
 
 export function SettingsScreen() {
   const { settings, replaceSettings, clearChat, ready } = useApp();
   const [draft, setDraft] = useState<AppSettings>(defaultAppSettings);
   const [testing, setTesting] = useState(false);
-  const [page, setPage] = useState<'settings' | 'about'>('settings');
+  const [page, setPage] = useState<SubPage>('settings');
 
   useEffect(() => {
     if (ready) {
@@ -37,6 +43,22 @@ export function SettingsScreen() {
     () => Boolean(draft.apiBaseUrl.trim() && draft.apiKey.trim()),
     [draft.apiBaseUrl, draft.apiKey],
   );
+
+  const llmHint = useMemo(() => {
+    const m = draft.model.trim();
+    if (!draft.apiBaseUrl.trim()) {
+      return '未填写 API 地址';
+    }
+    return m || DEFAULT_LLM_MODEL;
+  }, [draft.apiBaseUrl, draft.model]);
+
+  const live2dHint = useMemo(() => {
+    const u = draft.live2dModelUrl.trim();
+    if (!u) {
+      return '未填写 model3.json 地址';
+    }
+    return u.length > 42 ? `${u.slice(0, 40)}…` : u;
+  }, [draft.live2dModelUrl]);
 
   const onSave = async () => {
     await replaceSettings(draft);
@@ -67,6 +89,11 @@ export function SettingsScreen() {
     ]);
   };
 
+  const applyTestPreset = () => {
+    setDraft(integrationTestPreset());
+    Alert.alert('已填入', '已写入内置联调测试配置（可再点「保存设置」持久化）');
+  };
+
   if (!ready) {
     return <View style={styles.root} />;
   }
@@ -77,41 +104,18 @@ export function SettingsScreen() {
       <ScrollView
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled">
-        <Field
-          label="API Base URL"
-          value={draft.apiBaseUrl}
-          onChangeText={v => setDraft(s => ({ ...s, apiBaseUrl: v }))}
-          placeholder="https://api.openai.com/v1"
-          autoCapitalize="none"
-        />
-        <Field
-          label="API Key"
-          value={draft.apiKey}
-          onChangeText={v => setDraft(s => ({ ...s, apiKey: v }))}
-          placeholder="sk-..."
-          secureTextEntry
-          autoCapitalize="none"
-        />
-        <Field
-          label="Model"
-          value={draft.model}
-          onChangeText={v => setDraft(s => ({ ...s, model: v }))}
-          placeholder="gpt-4o-mini"
-          autoCapitalize="none"
-        />
-        <Field
-          label="Live2D 模型地址（model3.json）"
-          value={draft.live2dModelUrl}
-          onChangeText={v => setDraft(s => ({ ...s, live2dModelUrl: v }))}
-          placeholder={DEMO_MODEL3_URL}
-          autoCapitalize="none"
-        />
-        <Pressable
-          style={styles.demoBtn}
-          onPress={() =>
-            setDraft(s => ({ ...s, live2dModelUrl: DEMO_MODEL3_URL }))
-          }>
-          <Text style={styles.demoBtnText}>填入演示 model3（Haru 联调用）</Text>
+        <Pressable style={styles.subEntry} onPress={() => setPage('llm')}>
+          <Text style={styles.subEntryTitle}>大模型 API</Text>
+          <Text style={styles.subEntryHint}>{llmHint}</Text>
+        </Pressable>
+
+        <Pressable style={styles.subEntry} onPress={() => setPage('live2d')}>
+          <Text style={styles.subEntryTitle}>Live2D 模型</Text>
+          <Text style={styles.subEntryHint}>{live2dHint}</Text>
+        </Pressable>
+
+        <Pressable style={styles.fillTestBtn} onPress={applyTestPreset}>
+          <Text style={styles.fillTestBtnText}>填入测试信息</Text>
         </Pressable>
 
         <View style={styles.actions}>
@@ -131,32 +135,105 @@ export function SettingsScreen() {
           </Pressable>
         </View>
 
-        <Pressable style={styles.aboutEntry} onPress={() => setPage('about')}>
-          <Text style={styles.aboutEntryTitle}>关于</Text>
-          <Text style={styles.aboutEntryHint}>查看应用版本信息</Text>
+        <Pressable style={styles.subEntry} onPress={() => setPage('about')}>
+          <Text style={styles.subEntryTitle}>关于</Text>
+          <Text style={styles.subEntryHint}>查看应用版本信息</Text>
         </Pressable>
 
         <Text style={styles.hint}>
           纯客户端直连 API 时，请妥善保管 API Key；不要提交到公开仓库。
         </Text>
       </ScrollView>
+
       <Modal
-        visible={page === 'about'}
+        visible={page !== 'settings'}
         animationType="slide"
         presentationStyle="fullScreen"
         onRequestClose={() => setPage('settings')}>
-        <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
-          <View style={styles.aboutHeader}>
+        <SafeAreaView style={styles.modalRoot} edges={['top', 'bottom']}>
+          <View style={styles.subHeader}>
             <Pressable onPress={() => setPage('settings')}>
-              <Text style={styles.aboutBack}>返回</Text>
+              <Text style={styles.subBack}>返回</Text>
             </Pressable>
-            <Text style={styles.aboutTitle}>关于</Text>
-            <View style={styles.aboutHeaderSpacer} />
+            <Text style={styles.subTitle}>
+              {page === 'about'
+                ? '关于'
+                : page === 'llm'
+                  ? '大模型 API'
+                  : 'Live2D 模型'}
+            </Text>
+            <View style={styles.subHeaderSpacer} />
           </View>
-          <View style={styles.aboutCard}>
-            <Text style={styles.aboutName}>MikuToYou</Text>
-            <Text style={styles.aboutVersion}>版本 {APP_VERSION}</Text>
-          </View>
+
+          {page === 'about' && (
+            <View style={styles.aboutCard}>
+              <Text style={styles.aboutName}>MikuToYou</Text>
+              <Text style={styles.aboutVersion}>版本 {APP_VERSION}</Text>
+            </View>
+          )}
+
+          {page === 'llm' && (
+            <ScrollView
+              style={styles.subScroll}
+              contentContainerStyle={styles.subScrollContent}
+              keyboardShouldPersistTaps="handled">
+              <Field
+                label="API Base URL"
+                value={draft.apiBaseUrl}
+                onChangeText={v => setDraft(s => ({ ...s, apiBaseUrl: v }))}
+                placeholder={DEFAULT_LLM_API_BASE_URL}
+                autoCapitalize="none"
+              />
+              <Field
+                label="API Key"
+                value={draft.apiKey}
+                onChangeText={v => setDraft(s => ({ ...s, apiKey: v }))}
+                placeholder="sk-..."
+                secureTextEntry
+                autoCapitalize="none"
+              />
+              <Field
+                label="Model"
+                value={draft.model}
+                onChangeText={v => setDraft(s => ({ ...s, model: v }))}
+                placeholder={DEFAULT_LLM_MODEL}
+                autoCapitalize="none"
+              />
+              <Pressable
+                style={styles.secondary}
+                disabled={testing}
+                onPress={() => void onTest()}>
+                <Text style={styles.secondaryText}>
+                  {testing ? '测试中…' : '测试连接'}
+                </Text>
+              </Pressable>
+            </ScrollView>
+          )}
+
+          {page === 'live2d' && (
+            <ScrollView
+              style={styles.subScroll}
+              contentContainerStyle={styles.subScrollContent}
+              keyboardShouldPersistTaps="handled">
+              <Field
+                label="Live2D 模型地址（model3.json）"
+                value={draft.live2dModelUrl}
+                onChangeText={v => setDraft(s => ({ ...s, live2dModelUrl: v }))}
+                placeholder={DEFAULT_LIVE2D_MODEL3_JSON_URL}
+                autoCapitalize="none"
+              />
+              <Pressable
+                style={styles.demoBtn}
+                onPress={() =>
+                  setDraft(s => ({
+                    ...s,
+                    live2dModelUrl: DEFAULT_LIVE2D_MODEL3_JSON_URL,
+                  }))
+                }>
+                <Text style={styles.demoBtnText}>填入默认演示 model3（Haru）</Text>
+              </Pressable>
+            </ScrollView>
+          )}
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
@@ -201,9 +278,21 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bg,
   },
+  modalRoot: {
+    flex: 1,
+    backgroundColor: colors.bg,
+  },
   scroll: {
     padding: space.md,
     paddingBottom: space.xl,
+  },
+  subScroll: {
+    flex: 1,
+  },
+  subScrollContent: {
+    padding: space.md,
+    paddingBottom: space.xl,
+    gap: space.sm,
   },
   field: {
     marginBottom: space.md,
@@ -225,7 +314,7 @@ const styles = StyleSheet.create({
   demoBtn: {
     alignSelf: 'flex-start',
     marginTop: -space.sm,
-    marginBottom: space.md,
+    marginBottom: space.sm,
     paddingVertical: 6,
     paddingHorizontal: space.sm,
   },
@@ -233,6 +322,22 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: 12,
     fontWeight: '700',
+  },
+  fillTestBtn: {
+    marginTop: space.sm,
+    marginBottom: space.md,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingVertical: 10,
+    paddingHorizontal: space.md,
+    borderRadius: radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  fillTestBtnText: {
+    color: colors.primary,
+    fontWeight: '800',
+    fontSize: 14,
   },
   actions: {
     marginTop: space.sm,
@@ -276,8 +381,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
   },
-  aboutEntry: {
-    marginTop: space.md,
+  subEntry: {
+    marginBottom: space.sm,
     borderRadius: radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
@@ -285,16 +390,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
     paddingVertical: space.sm,
   },
-  aboutEntryTitle: {
+  subEntryTitle: {
     color: colors.textMain,
     fontWeight: '700',
   },
-  aboutEntryHint: {
+  subEntryHint: {
     color: colors.textSub,
     fontSize: 12,
     marginTop: 4,
   },
-  aboutHeader: {
+  subHeader: {
     height: 52,
     paddingHorizontal: space.md,
     flexDirection: 'row',
@@ -304,17 +409,17 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  aboutBack: {
+  subBack: {
     color: colors.primary,
     fontWeight: '700',
     fontSize: 14,
   },
-  aboutTitle: {
+  subTitle: {
     color: colors.textMain,
     fontSize: 17,
     fontWeight: '700',
   },
-  aboutHeaderSpacer: {
+  subHeaderSpacer: {
     width: 30,
   },
   aboutCard: {

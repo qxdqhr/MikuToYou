@@ -3,6 +3,8 @@
  * 脚本自 CDN 加载，便于在 RN WebView 中快速验证 model3.json 是否可用。
  */
 
+import { DEFAULT_LIVE2D_MODEL3_JSON_URL } from '../../constants/integrationDefaults';
+
 /** 官方 redistributable Core（npm 镜像，仍需遵守 Live2D 许可）。 */
 export const CUBISM_CORE_CDN =
   'https://cdn.jsdelivr.net/npm/live2dcubismcore@1.0.0/live2dcubismcore.min.js';
@@ -13,12 +15,8 @@ export const PIXI_CDN =
 export const PIXI_LIVE2D_CUBISM4_CDN =
   'https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/cubism4.min.js';
 
-/**
- * Haru 演示模型（pixi-live2d-display 仓库测试资源，仅用于联调）。
- * 使用固定 commit，避免 @master 漂移导致相对纹理路径 404。
- */
-export const DEMO_MODEL3_URL =
-  'https://cdn.jsdelivr.net/gh/guansss/pixi-live2d-display@31317b37d5e22955a44d5b11f37f421e94a11269/test/assets/haru/haru_greeter_t03.model3.json';
+/** Haru 演示 model3（与 `integrationDefaults` 同源，便于旧代码引用）。 */
+export const DEMO_MODEL3_URL = DEFAULT_LIVE2D_MODEL3_JSON_URL;
 
 /** 与 loadHTMLString 的 baseUrl 一致：优先使用模型所在源，减少 WebView 下跨域页面加载纹理失败。 */
 export function live2dWebViewBaseUrl(modelUrl: string): string {

@@ -1,3 +1,4 @@
+import { DEFAULT_LLM_MODEL } from '../constants/integrationDefaults';
 import type { ChatMessage } from '../types/chat';
 import type { AppSettings } from '../types/settings';
 
@@ -36,7 +37,7 @@ export async function sendChatMessage(
       Authorization: `Bearer ${settings.apiKey}`,
     },
     body: JSON.stringify({
-      model: settings.model || 'gpt-4o-mini',
+      model: settings.model.trim() || DEFAULT_LLM_MODEL,
       messages,
     }),
   });
