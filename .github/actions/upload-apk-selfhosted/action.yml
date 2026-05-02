@@ -101,11 +101,14 @@ runs:
           echo '::warning::LOCAL_APK_SSH_HOST 为 127.0.0.1/localhost 时，从 GitHub runner 连接的是 **runner 自己**，不是你的桌面。请改为公网可达的主机名或 IP（例如云服务器 IP）。'
         fi
         mkdir -p ~/.ssh
-        printf '%s\n' "${LOCAL_APK_SSH_KEY}" > ~/.ssh/id_ed25519
-        chmod 600 ~/.ssh/id_ed25519
+        KEY_FILE="${HOME}/.ssh/mikutoyou_apk_deploy"
+        # Secret 若从网页粘贴易带 CRLF，会导致私钥无效；仅用于本 job 的临时文件
+        printf '%s\n' "${LOCAL_APK_SSH_KEY}" | tr -d '\r' > "${KEY_FILE}"
+        chmod 600 "${KEY_FILE}"
         ssh-keyscan -p "${PORT}" "${LOCAL_APK_SSH_HOST}" >> ~/.ssh/known_hosts
-        ssh -p "${PORT}" "${LOCAL_APK_SSH_USER}@${LOCAL_APK_SSH_HOST}" "mkdir -p '${REMOTE_PATH}'"
-        scp -P "${PORT}" "$APK" "${LOCAL_APK_SSH_USER}@${LOCAL_APK_SSH_HOST}:${REMOTE_PATH}/${APK_NAME}"
+        SSH_OPTS=(-i "${KEY_FILE}" -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=30)
+        ssh "${SSH_OPTS[@]}" -p "${PORT}" "${LOCAL_APK_SSH_USER}@${LOCAL_APK_SSH_HOST}" "mkdir -p '${REMOTE_PATH}'"
+        scp "${SSH_OPTS[@]}" -P "${PORT}" "$APK" "${LOCAL_APK_SSH_USER}@${LOCAL_APK_SSH_HOST}:${REMOTE_PATH}/${APK_NAME}"
         DOWNLOAD_URL="${LOCAL_APK_BASE_URL%/}/${URL_SUFFIX}"
 
         # 固定「最新」路径，便于反代根目录直达（不依赖版本号/SHA 子目录）。
@@ -118,7 +121,7 @@ runs:
           LATEST_NAME="mikutoyou-release.apk"
           LATEST_URL="${LOCAL_APK_BASE_URL%/}/release/latest/${LATEST_NAME}"
         fi
-        ssh -p "${PORT}" "${LOCAL_APK_SSH_USER}@${LOCAL_APK_SSH_HOST}" \
+        ssh "${SSH_OPTS[@]}" -p "${PORT}" "${LOCAL_APK_SSH_USER}@${LOCAL_APK_SSH_HOST}" \
           "mkdir -p '${LATEST_DIR}' && cp -f '${REMOTE_PATH}/${APK_NAME}' '${LATEST_DIR}/${LATEST_NAME}'"
 
         if [[ "$MODE" == "release" ]]; then
