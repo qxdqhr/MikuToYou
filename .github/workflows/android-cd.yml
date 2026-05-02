@@ -1,3 +1,6 @@
+# main 推送 / 手动触发：构建 debug APK，上传 artifact，并按与 release 对称的规则 SCP 到自建站：
+#   {REMOTE}/debug/releases/<仓库名>/<分支名-安全>/<短SHA>/mikutoyou-debug-<短SHA>.apk
+# 使用与 android-release.yml 相同的 LOCAL_APK_* secrets（不必另配）。
 name: Android CD
 
 on:
@@ -33,3 +36,57 @@ jobs:
         with:
           name: app-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
+      # 与 android-release.yml 共用 LOCAL_APK_*；未配置则跳过 SCP，仅保留 artifact。
+      - name: Upload debug APK to self-hosted server
+        env:
+          LOCAL_APK_SSH_HOST: ${{ secrets.LOCAL_APK_SSH_HOST }}
+          LOCAL_APK_SSH_PORT: ${{ secrets.LOCAL_APK_SSH_PORT }}
+          LOCAL_APK_SSH_USER: ${{ secrets.LOCAL_APK_SSH_USER }}
+          LOCAL_APK_SSH_KEY: ${{ secrets.LOCAL_APK_SSH_KEY }}
+          LOCAL_APK_REMOTE_DIR: ${{ secrets.LOCAL_APK_REMOTE_DIR }}
+          LOCAL_APK_BASE_URL: ${{ secrets.LOCAL_APK_BASE_URL }}
+          LOCAL_APK_PATH_PREFIX: ${{ secrets.LOCAL_APK_PATH_PREFIX }}
+        run: |
+          set -euo pipefail
+          APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          REPO_NAME="${GITHUB_REPOSITORY##*/}"
+          SAFE_BRANCH="${GITHUB_REF_NAME//\//-}"
+          SHORT_SHA="${GITHUB_SHA:0:7}"
+          APK_NAME="mikutoyou-debug-${SHORT_SHA}.apk"
+          if [[ ! -f "$APK" ]]; then
+            echo "Debug APK missing at $APK" >&2
+            exit 1
+          fi
+          if [[ -z "${LOCAL_APK_SSH_HOST:-}" || -z "${LOCAL_APK_SSH_USER:-}" || \
+                -z "${LOCAL_APK_SSH_KEY:-}" || -z "${LOCAL_APK_REMOTE_DIR:-}" || \
+                -z "${LOCAL_APK_BASE_URL:-}" ]]; then
+            echo "LOCAL_APK_* secrets not set; skip SCP (debug APK still in Actions artifacts)."
+            exit 0
+          fi
+          if [[ -z "${LOCAL_APK_PATH_PREFIX:-}" ]]; then
+            PATH_PREFIX="releases/${REPO_NAME}"
+          else
+            PATH_PREFIX="${LOCAL_APK_PATH_PREFIX}"
+          fi
+          if [[ "${PATH_PREFIX}" == "." ]]; then
+            REMOTE_PATH="${LOCAL_APK_REMOTE_DIR%/}/debug/${SAFE_BRANCH}/${SHORT_SHA}"
+            URL_SUFFIX="debug/${SAFE_BRANCH}/${SHORT_SHA}/${APK_NAME}"
+          else
+            REMOTE_PATH="${LOCAL_APK_REMOTE_DIR%/}/debug/${PATH_PREFIX}/${SAFE_BRANCH}/${SHORT_SHA}"
+            URL_SUFFIX="debug/${PATH_PREFIX}/${SAFE_BRANCH}/${SHORT_SHA}/${APK_NAME}"
+          fi
+          PORT="${LOCAL_APK_SSH_PORT:-22}"
+          mkdir -p ~/.ssh
+          printf '%s\n' "${LOCAL_APK_SSH_KEY}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "${PORT}" "${LOCAL_APK_SSH_HOST}" >> ~/.ssh/known_hosts
+          ssh -p "${PORT}" "${LOCAL_APK_SSH_USER}@${LOCAL_APK_SSH_HOST}" "mkdir -p '${REMOTE_PATH}'"
+          scp -P "${PORT}" "$APK" "${LOCAL_APK_SSH_USER}@${LOCAL_APK_SSH_HOST}:${REMOTE_PATH}/${APK_NAME}"
+          DOWNLOAD_URL="${LOCAL_APK_BASE_URL%/}/${URL_SUFFIX}"
+          {
+            echo "### 自建服务 Debug APK（与 release 目录规则对称：debug/<路径前缀>/…）"
+            echo ""
+            echo "**下载**： \`${DOWNLOAD_URL}\`"
+            echo ""
+            echo "**远端路径**： \`${REMOTE_PATH}/${APK_NAME}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"

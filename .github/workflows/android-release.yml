@@ -1,3 +1,11 @@
+# Release：打 tag v* 触发。自建下载站需配置 GitHub Secrets：
+#   LOCAL_APK_SSH_HOST      例 47.94.166.44
+#   LOCAL_APK_SSH_PORT    可选，默认 22
+#   LOCAL_APK_SSH_USER    SSH 用户
+#   LOCAL_APK_SSH_KEY     私钥全文（ed25519 等）
+#   LOCAL_APK_REMOTE_DIR  远端根目录，应对 HTTP 根目录，例 /home/<user>/share-downloads
+#   LOCAL_APK_BASE_URL    公网访问根，例 http://47.94.166.44:6001（勿尾斜杠亦可）
+#   LOCAL_APK_PATH_PREFIX 可选；不设则 releases/<仓库名>，与注释内 OSS 路径一致；设为 "." 则 <REMOTE_DIR>/<tag>/ 扁平布局
 name: Android Release Asset
 
 on:
@@ -48,67 +56,161 @@ jobs:
         run: |
           cd android
           ./gradlew assembleRelease
-      - name: Install ossutil
-        if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          curl -fsSL -o /tmp/ossutil.zip "https://gosspublic.alicdn.com/ossutil/1.7.19/ossutil-v1.7.19-linux-amd64.zip"
-          unzip -o -q /tmp/ossutil.zip -d /tmp/ossutil
-          mkdir -p "${HOME}/bin"
-          install -m755 /tmp/ossutil/ossutil-v1.7.19-linux-amd64/ossutil64 "${HOME}/bin/ossutil64"
-      - name: Upload release APK to Aliyun OSS
+      # - name: Install ossutil
+      #   if: startsWith(github.ref, 'refs/tags/')
+      #   run: |
+      #     curl -fsSL -o /tmp/ossutil.zip "https://gosspublic.alicdn.com/ossutil/1.7.19/ossutil-v1.7.19-linux-amd64.zip"
+      #     unzip -o -q /tmp/ossutil.zip -d /tmp/ossutil
+      #     mkdir -p "${HOME}/bin"
+      #     install -m755 /tmp/ossutil/ossutil-v1.7.19-linux-amd64/ossutil64 "${HOME}/bin/ossutil64"
+      # - name: Upload release APK to Aliyun OSS
+      #   if: startsWith(github.ref, 'refs/tags/')
+      #   env:
+      #     ALIYUN_OSS_BUCKET: ${{ secrets.ALIYUN_OSS_BUCKET }}
+      #     ALIYUN_OSS_ENDPOINT: ${{ secrets.ALIYUN_OSS_ENDPOINT }}
+      #     ALIYUN_OSS_ACCESS_KEY_ID: ${{ secrets.ALIYUN_OSS_ACCESS_KEY_ID }}
+      #     ALIYUN_OSS_ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_OSS_ACCESS_KEY_SECRET }}
+      #     ALIYUN_OSS_OBJECT_KEY: ${{ secrets.ALIYUN_OSS_OBJECT_KEY }}
+      #     ALIYUN_OSS_CDN_BASE: ${{ secrets.ALIYUN_OSS_CDN_BASE }}
+      #   run: |
+      #     set -euo pipefail
+      #     APK="android/app/build/outputs/apk/release/app-release.apk"
+      #     if [[ ! -f "$APK" ]]; then
+      #       echo "Release APK missing at $APK" >&2
+      #       exit 1
+      #     fi
+      #     if [[ -z "${ALIYUN_OSS_BUCKET:-}" || -z "${ALIYUN_OSS_ENDPOINT:-}" || \
+      #           -z "${ALIYUN_OSS_ACCESS_KEY_ID:-}" || -z "${ALIYUN_OSS_ACCESS_KEY_SECRET:-}" ]]; then
+      #       echo "OSS secrets not set (ALIYUN_OSS_BUCKET / ENDPOINT / ACCESS_KEY_ID / ACCESS_KEY_SECRET); skip OSS upload."
+      #       exit 0
+      #     fi
+      #     EP="${ALIYUN_OSS_ENDPOINT#https://}"
+      #     EP="${EP#http://}"
+      #     REPO_NAME="${GITHUB_REPOSITORY##*/}"
+      #     TAG="${GITHUB_REF_NAME}"
+      #     OBJECT_KEY="${ALIYUN_OSS_OBJECT_KEY:-releases/${REPO_NAME}/${TAG}/app-release.apk}"
+      #     "${HOME}/bin/ossutil64" cp -f "$APK" "oss://${ALIYUN_OSS_BUCKET}/${OBJECT_KEY}" \
+      #       -e "$EP" \
+      #       -i "${ALIYUN_OSS_ACCESS_KEY_ID}" \
+      #       -k "${ALIYUN_OSS_ACCESS_KEY_SECRET}"
+      #     LINK1="https://${ALIYUN_OSS_BUCKET}.${EP}/${OBJECT_KEY}"
+      #     if [[ -n "${ALIYUN_OSS_CDN_BASE:-}" ]]; then
+      #       CDN="${ALIYUN_OSS_CDN_BASE#https://}"
+      #       CDN="${CDN#http://}"
+      #       LINK2="https://${CDN}/${OBJECT_KEY}"
+      #     else
+      #       LINK2="https://${EP}/${ALIYUN_OSS_BUCKET}/${OBJECT_KEY}"
+      #     fi
+      #     {
+      #       echo "### OSS APK（与本地打包脚本同一路径规则）"
+      #       echo ""
+      #       echo "**虚拟主机样式**："
+      #       echo "\`${LINK1}\`"
+      #       echo ""
+      #       echo "**路径样式或 CDN**："
+      #       echo "\`${LINK2}\`"
+      #       echo ""
+      #       echo "Object: \`${OBJECT_KEY}\`"
+      #     } >> "${GITHUB_STEP_SUMMARY}"
+      #     echo "OSS virtual-host URL: ${LINK1}"
+      #     echo "OSS path/CDN URL:      ${LINK2}"
+      # 远程目录与 OSS 注释块一致：{REMOTE_DIR}/releases/{仓库名}/{tag}/mikutoyou-{tag}.apk
+      # 可选 secrets.LOCAL_APK_PATH_PREFIX：覆盖 releases/<repo>（设为 "." 则退化为 {REMOTE_DIR}/{tag}/，兼容旧布局）
+      - name: Upload release APK to self-hosted server
         if: startsWith(github.ref, 'refs/tags/')
         env:
-          ALIYUN_OSS_BUCKET: ${{ secrets.ALIYUN_OSS_BUCKET }}
-          ALIYUN_OSS_ENDPOINT: ${{ secrets.ALIYUN_OSS_ENDPOINT }}
-          ALIYUN_OSS_ACCESS_KEY_ID: ${{ secrets.ALIYUN_OSS_ACCESS_KEY_ID }}
-          ALIYUN_OSS_ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_OSS_ACCESS_KEY_SECRET }}
-          ALIYUN_OSS_OBJECT_KEY: ${{ secrets.ALIYUN_OSS_OBJECT_KEY }}
-          ALIYUN_OSS_CDN_BASE: ${{ secrets.ALIYUN_OSS_CDN_BASE }}
+          LOCAL_APK_SSH_HOST: ${{ secrets.LOCAL_APK_SSH_HOST }}
+          LOCAL_APK_SSH_PORT: ${{ secrets.LOCAL_APK_SSH_PORT }}
+          LOCAL_APK_SSH_USER: ${{ secrets.LOCAL_APK_SSH_USER }}
+          LOCAL_APK_SSH_KEY: ${{ secrets.LOCAL_APK_SSH_KEY }}
+          LOCAL_APK_REMOTE_DIR: ${{ secrets.LOCAL_APK_REMOTE_DIR }}
+          LOCAL_APK_BASE_URL: ${{ secrets.LOCAL_APK_BASE_URL }}
+          LOCAL_APK_PATH_PREFIX: ${{ secrets.LOCAL_APK_PATH_PREFIX }}
         run: |
           set -euo pipefail
           APK="android/app/build/outputs/apk/release/app-release.apk"
+          TAG="${GITHUB_REF_NAME}"
+          APK_NAME="mikutoyou-${TAG}.apk"
+          DEFAULT_FALLBACK_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/app-release.apk"
           if [[ ! -f "$APK" ]]; then
             echo "Release APK missing at $APK" >&2
             exit 1
           fi
-          if [[ -z "${ALIYUN_OSS_BUCKET:-}" || -z "${ALIYUN_OSS_ENDPOINT:-}" || \
-                -z "${ALIYUN_OSS_ACCESS_KEY_ID:-}" || -z "${ALIYUN_OSS_ACCESS_KEY_SECRET:-}" ]]; then
-            echo "OSS secrets not set (ALIYUN_OSS_BUCKET / ENDPOINT / ACCESS_KEY_ID / ACCESS_KEY_SECRET); skip OSS upload."
+          if [[ -z "${LOCAL_APK_SSH_HOST:-}" || -z "${LOCAL_APK_SSH_USER:-}" || \
+                -z "${LOCAL_APK_SSH_KEY:-}" || -z "${LOCAL_APK_REMOTE_DIR:-}" || \
+                -z "${LOCAL_APK_BASE_URL:-}" ]]; then
+            echo "Self-host secrets missing; skip SCP upload and keep fallback release URL."
+            echo "APK_DOWNLOAD_URL=${DEFAULT_FALLBACK_URL}" >> "${GITHUB_ENV}"
             exit 0
           fi
-          EP="${ALIYUN_OSS_ENDPOINT#https://}"
-          EP="${EP#http://}"
           REPO_NAME="${GITHUB_REPOSITORY##*/}"
-          TAG="${GITHUB_REF_NAME}"
-          OBJECT_KEY="${ALIYUN_OSS_OBJECT_KEY:-releases/${REPO_NAME}/${TAG}/app-release.apk}"
-          "${HOME}/bin/ossutil64" cp -f "$APK" "oss://${ALIYUN_OSS_BUCKET}/${OBJECT_KEY}" \
-            -e "$EP" \
-            -i "${ALIYUN_OSS_ACCESS_KEY_ID}" \
-            -k "${ALIYUN_OSS_ACCESS_KEY_SECRET}"
-          LINK1="https://${ALIYUN_OSS_BUCKET}.${EP}/${OBJECT_KEY}"
-          if [[ -n "${ALIYUN_OSS_CDN_BASE:-}" ]]; then
-            CDN="${ALIYUN_OSS_CDN_BASE#https://}"
-            CDN="${CDN#http://}"
-            LINK2="https://${CDN}/${OBJECT_KEY}"
+          if [[ -z "${LOCAL_APK_PATH_PREFIX:-}" ]]; then
+            PATH_PREFIX="releases/${REPO_NAME}"
           else
-            LINK2="https://${EP}/${ALIYUN_OSS_BUCKET}/${OBJECT_KEY}"
+            PATH_PREFIX="${LOCAL_APK_PATH_PREFIX}"
           fi
+          if [[ "${PATH_PREFIX}" == "." ]]; then
+            REMOTE_PATH="${LOCAL_APK_REMOTE_DIR%/}/${TAG}"
+            URL_SUFFIX="${TAG}/${APK_NAME}"
+          else
+            REMOTE_PATH="${LOCAL_APK_REMOTE_DIR%/}/${PATH_PREFIX}/${TAG}"
+            URL_SUFFIX="${PATH_PREFIX}/${TAG}/${APK_NAME}"
+          fi
+          PORT="${LOCAL_APK_SSH_PORT:-22}"
+          mkdir -p ~/.ssh
+          printf '%s\n' "${LOCAL_APK_SSH_KEY}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "${PORT}" "${LOCAL_APK_SSH_HOST}" >> ~/.ssh/known_hosts
+          ssh -p "${PORT}" "${LOCAL_APK_SSH_USER}@${LOCAL_APK_SSH_HOST}" "mkdir -p '${REMOTE_PATH}'"
+          scp -P "${PORT}" "$APK" "${LOCAL_APK_SSH_USER}@${LOCAL_APK_SSH_HOST}:${REMOTE_PATH}/${APK_NAME}"
+          DOWNLOAD_URL="${LOCAL_APK_BASE_URL%/}/${URL_SUFFIX}"
+          echo "APK_DOWNLOAD_URL=${DOWNLOAD_URL}" >> "${GITHUB_ENV}"
           {
-            echo "### OSS APK（与本地打包脚本同一路径规则）"
+            echo "### 自建服务 APK（目录规则对齐 OSS：releases/<仓库>/<tag>/）"
             echo ""
-            echo "**虚拟主机样式**："
-            echo "\`${LINK1}\`"
+            echo "**下载**： \`${DOWNLOAD_URL}\`"
             echo ""
-            echo "**路径样式或 CDN**："
-            echo "\`${LINK2}\`"
-            echo ""
-            echo "Object: \`${OBJECT_KEY}\`"
+            echo "**远端路径**： \`${REMOTE_PATH}/${APK_NAME}\`"
           } >> "${GITHUB_STEP_SUMMARY}"
-          echo "OSS virtual-host URL: ${LINK1}"
-          echo "OSS path/CDN URL:      ${LINK2}"
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
           files: android/app/build/outputs/apk/release/app-release.apk
           name: Release ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
+      - name: Send success email with APK link
+        if: success() && startsWith(github.ref, 'refs/tags/') && secrets.SMTP_SERVER != '' && secrets.SMTP_USERNAME != '' && secrets.SMTP_PASSWORD != '' && secrets.NOTIFY_EMAIL_TO != '' && secrets.NOTIFY_EMAIL_FROM != ''
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          secure: true
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "[MikuToYou] APK 打包成功 ${{ github.ref_name }}"
+          to: ${{ secrets.NOTIFY_EMAIL_TO }}
+          from: ${{ secrets.NOTIFY_EMAIL_FROM }}
+          body: |
+            APK 打包成功。
+
+            Tag: ${{ github.ref_name }}
+            下载地址: ${{ env.APK_DOWNLOAD_URL }}
+            Release 页面: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}
+
+      - name: Send failure email
+        if: failure() && startsWith(github.ref, 'refs/tags/') && secrets.SMTP_SERVER != '' && secrets.SMTP_USERNAME != '' && secrets.SMTP_PASSWORD != '' && secrets.NOTIFY_EMAIL_TO != '' && secrets.NOTIFY_EMAIL_FROM != ''
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          secure: true
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "[MikuToYou] APK 打包失败 ${{ github.ref_name }}"
+          to: ${{ secrets.NOTIFY_EMAIL_TO }}
+          from: ${{ secrets.NOTIFY_EMAIL_FROM }}
+          body: |
+            APK 打包失败，请查看 Actions 日志。
+
+            Tag: ${{ github.ref_name }}
+            日志入口: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
