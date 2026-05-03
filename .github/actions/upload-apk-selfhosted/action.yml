@@ -111,7 +111,8 @@ runs:
           exit 1
         fi
         echo "用于 SSH 上传的公钥指纹（须出现在服务器 ${LOCAL_APK_SSH_USER} 的 ~/.ssh/authorized_keys 中）: $(ssh-keygen -lf "${KEY_FILE}" | awk '{print $2, $3}')"
-        ssh-keyscan -p "${PORT}" "${LOCAL_APK_SSH_HOST}" >> ~/.ssh/known_hosts
+        # 不用 ssh-keyscan：会对多种 host key 类型多次建连，在 frp/限连下易出现多行「Connection closed by remote host」。
+        # StrictHostKeyChecking=accept-new：首次连接自动写入 known_hosts，无需交互输入 yes；与 BatchMode=yes 兼容。
         # IPQoS=none：部分路由器对默认 DSCP 处理异常会导致握手后被掐断
         # 不用 scp/sftp：反代、精简 sshd、无 Subsystem sftp 时 scp 常出现 Connection closed；改为 stdin 经 exec 通道 cat 到远端（仅依赖 shell+cat）
         SSH_OPTS=(
@@ -119,12 +120,15 @@ runs:
           -o IdentitiesOnly=yes
           -o BatchMode=yes
           -o ConnectTimeout=30
+          -o StrictHostKeyChecking=accept-new
           -o PreferredAuthentications=publickey
           -o IPQoS=none
           -o TCPKeepAlive=yes
           -o ServerAliveInterval=15
           -o ServerAliveCountMax=4
         )
+        echo "== SSH 预检（echo；失败则与 APK 流传输无关）=="
+        ssh "${SSH_OPTS[@]}" -p "${PORT}" "${LOCAL_APK_SSH_USER}@${LOCAL_APK_SSH_HOST}" "echo mikutoyou-ssh-ok"
         UPLOADING="${REMOTE_PATH}/${APK_NAME}.uploading"
         ssh "${SSH_OPTS[@]}" -p "${PORT}" "${LOCAL_APK_SSH_USER}@${LOCAL_APK_SSH_HOST}" \
           "mkdir -p '${REMOTE_PATH}' && cat > '${UPLOADING}' && mv -f '${UPLOADING}' '${REMOTE_PATH}/${APK_NAME}'" < "$APK"
