@@ -23,7 +23,7 @@ type AppContextValue = {
   ready: boolean;
   updateSettings: (next: Partial<AppSettings>) => Promise<void>;
   replaceSettings: (next: AppSettings) => Promise<void>;
-  appendMessage: (msg: ChatMessage) => Promise<void>;
+  appendMessage: (msg: ChatMessage) => Promise<ChatMessage[]>;
   setMessages: (msgs: ChatMessage[]) => Promise<void>;
   clearChat: () => Promise<void>;
   reload: () => Promise<void>;
@@ -70,14 +70,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await saveSettings(next);
   }, []);
 
-  const appendMessage = useCallback(
-    async (msg: ChatMessage) => {
-      const next = [...messages, msg];
-      setMessagesState(next);
-      await saveMessages(next);
-    },
-    [messages],
-  );
+  /** 使用函数式更新，避免 await 前后闭包中的 messages 过期（切 Tab / 设置更新时易丢用户气泡） */
+  const appendMessage = useCallback(async (msg: ChatMessage) => {
+    let next: ChatMessage[] = [];
+    setMessagesState(prev => {
+      next = [...prev, msg];
+      return next;
+    });
+    await saveMessages(next);
+    return next;
+  }, []);
 
   const setMessages = useCallback(async (msgs: ChatMessage[]) => {
     setMessagesState(msgs);

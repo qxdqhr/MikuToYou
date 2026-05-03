@@ -1,3 +1,4 @@
+import { useIsFocused } from '@react-navigation/native';
 import React, { useEffect, useRef } from 'react';
 import { FlatList, ListRenderItem, StyleSheet, View } from 'react-native';
 import type { ChatMessage } from '../../types/chat';
@@ -10,15 +11,17 @@ type Props = {
 
 export function MessageList({ messages }: Props) {
   const listRef = useRef<FlatList<ChatMessage>>(null);
+  const isFocused = useIsFocused();
+  const tailId = messages[messages.length - 1]?.id;
 
   useEffect(() => {
-    if (messages.length === 0) {
+    if (!isFocused || messages.length === 0) {
       return;
     }
     requestAnimationFrame(() => {
       listRef.current?.scrollToEnd({ animated: true });
     });
-  }, [messages.length]);
+  }, [isFocused, messages.length, tailId]);
 
   const renderItem: ListRenderItem<ChatMessage> = ({ item }) => (
     <MessageBubble message={item} />

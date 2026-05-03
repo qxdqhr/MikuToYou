@@ -41,11 +41,10 @@ export function ChatScreen() {
         content: text,
         timestamp: Date.now(),
       };
-      await appendMessage(userMsg);
+      const historyWithUser = await appendMessage(userMsg);
       setSending(true);
       try {
-        const nextHistory = [...messages, userMsg];
-        const reply = await sendChatMessage(settings, nextHistory);
+        const reply = await sendChatMessage(settings, historyWithUser);
         await appendMessage({
           id: newId(),
           role: 'assistant',
@@ -64,7 +63,7 @@ export function ChatScreen() {
         setSending(false);
       }
     },
-    [apiConfigured, appendMessage, messages, settings],
+    [apiConfigured, appendMessage, settings],
   );
 
   if (!ready) {
