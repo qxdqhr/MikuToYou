@@ -17,7 +17,7 @@ import {
   DEFAULT_LLM_MODEL,
 } from '../constants/integrationDefaults';
 import { RELEASE_TAG } from '../constants/releaseTag';
-import { testConnection } from '../services/llmClient';
+import { testConnection } from '../modules/llm';
 import { useApp } from '../state/AppContext';
 import type { AppSettings } from '../types/settings';
 import { defaultAppSettings, integrationTestPreset } from '../types/settings';

@@ -14,7 +14,7 @@ import { MessageList } from '../components/chat/MessageList';
 import { EmptyState } from '../components/feedback/EmptyState';
 import { TopBar } from '../components/layout/TopBar';
 import type { RootTabParamList } from '../navigation/RootTabs';
-import { sendChatMessage } from '../services/llmClient';
+import { sendChatMessage } from '../modules/llm';
 import { newId, useApp } from '../state/AppContext';
 import { colors } from '../theme/tokens';
 

@@ -1,6 +1,7 @@
-import { DEFAULT_LLM_MODEL } from '../constants/integrationDefaults';
-import type { ChatMessage } from '../types/chat';
-import type { AppSettings } from '../types/settings';
+import { DEFAULT_LLM_MODEL } from '../../constants/integrationDefaults';
+import type { ChatMessage } from '../../types/chat';
+import type { AppSettings } from '../../types/settings';
+import { buildLlmMessageList } from './context';
 
 function normalizeBaseUrl(url: string): string {
   return url.trim().replace(/\/+$/, '');
@@ -17,18 +18,25 @@ function chatCompletionsUrl(base: string): string {
   return `${b}/v1/chat/completions`;
 }
 
-function toApiMessages(history: ChatMessage[]): { role: string; content: string }[] {
+function toApiMessages(
+  history: ChatMessage[],
+): { role: string; content: string }[] {
   return history
-    .filter(m => m.role === 'user' || m.role === 'assistant' || m.role === 'system')
+    .filter(
+      m =>
+        m.role === 'user' ||
+        m.role === 'assistant' ||
+        m.role === 'system',
+    )
     .map(m => ({ role: m.role, content: m.content }));
 }
 
 export async function sendChatMessage(
   settings: AppSettings,
-  history: ChatMessage[],
+  conversation: ChatMessage[],
 ): Promise<string> {
   const url = chatCompletionsUrl(settings.apiBaseUrl);
-  const messages = toApiMessages(history);
+  const messages = toApiMessages(buildLlmMessageList(settings, conversation));
 
   const res = await fetch(url, {
     method: 'POST',

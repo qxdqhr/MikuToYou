@@ -5,6 +5,7 @@
  */
 
 import { NavigationContainer } from '@react-navigation/native';
+import { navigationTheme } from './src/theme/navigationTheme';
 import React from 'react';
 import { StatusBar, useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -19,7 +20,7 @@ function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AppProvider>
-          <NavigationContainer>
+          <NavigationContainer theme={navigationTheme}>
             <StatusBar
               barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'}
             />

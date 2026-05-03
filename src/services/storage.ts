@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { ChatMessage } from '../types/chat';
 import type { AppSettings } from '../types/settings';
-import { defaultAppSettings } from '../types/settings';
+import { defaultAppSettings, normalizeAppSettings } from '../types/settings';
 
 const SETTINGS_KEY = 'mikutoyou:settings:v1';
 const MESSAGES_KEY = 'mikutoyou:messages:v1';
@@ -9,13 +9,13 @@ const MESSAGES_KEY = 'mikutoyou:messages:v1';
 export async function loadSettings(): Promise<AppSettings> {
   const raw = await AsyncStorage.getItem(SETTINGS_KEY);
   if (!raw) {
-    return { ...defaultAppSettings };
+    return normalizeAppSettings({});
   }
   try {
     const parsed = JSON.parse(raw) as Partial<AppSettings>;
-    return { ...defaultAppSettings, ...parsed };
+    return normalizeAppSettings({ ...defaultAppSettings, ...parsed });
   } catch {
-    return { ...defaultAppSettings };
+    return normalizeAppSettings({});
   }
 }
 
