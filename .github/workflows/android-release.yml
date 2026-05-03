@@ -1,5 +1,5 @@
-# Release：打 tag v* 触发。构建在 GitHub runner；若需落到本机/服务器 fileshare，须配置 Secrets 并由 SCP 推送（见 upload-apk-selfhosted）。
-# 自建文件服务需配置 GitHub Secrets：
+# Release：打 tag v* 触发。构建在 GitHub runner；落到自建目录由独立 workflow「Sync APK to self-hosted」拉取最新 Release/Debug 后 SSH 推送（见 sync-apk-selfhosted.yml）。
+# 自建文件服务需配置 GitHub Secrets（供同步 workflow 使用）：
 #   LOCAL_APK_SSH_HOST      例 47.94.166.44
 #   LOCAL_APK_SSH_PORT      可选，默认 22；frp tcp 穿透 SSH 时填 remotePort（如 6022），勿填 frps bind_port
 #   LOCAL_APK_SSH_USER      SSH 用户
@@ -68,27 +68,17 @@ jobs:
           cd android
           ./gradlew assembleRelease
       - name: Upload release APK to Aliyun OSS (optional)
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         uses: ./.github/actions/upload-apk-aliyun-oss
-      - name: Upload release APK to self-hosted server
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: ./.github/actions/upload-apk-selfhosted
-        with:
-          build_mode: release
-          apk_path: android/app/build/outputs/apk/release/app-release.apk
-        env:
-          LOCAL_APK_SSH_HOST: ${{ secrets.LOCAL_APK_SSH_HOST }}
-          LOCAL_APK_SSH_PORT: ${{ secrets.LOCAL_APK_SSH_PORT }}
-          LOCAL_APK_SSH_USER: ${{ secrets.LOCAL_APK_SSH_USER }}
-          LOCAL_APK_SSH_KEY: ${{ secrets.LOCAL_APK_SSH_KEY }}
-          LOCAL_APK_REMOTE_DIR: ${{ secrets.LOCAL_APK_REMOTE_DIR }}
-          LOCAL_APK_BASE_URL: ${{ secrets.LOCAL_APK_BASE_URL }}
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
           files: android/app/build/outputs/apk/release/app-release.apk
           name: Release ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
+      - name: Set APK URL for email (GitHub Releases 直链；自建由 sync-apk-selfhosted 更新)
+        run: |
+          echo "APK_DOWNLOAD_URL=https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/app-release.apk" >> "${GITHUB_ENV}"
       - name: Notify build (success)
         if: success() && startsWith(github.ref, 'refs/tags/') && env.SMTP_SERVER != '' && env.SMTP_USERNAME != '' && env.SMTP_PASSWORD != '' && env.NOTIFY_EMAIL_TO != '' && env.NOTIFY_EMAIL_FROM != ''
         uses: ./.github/actions/send-build-notification

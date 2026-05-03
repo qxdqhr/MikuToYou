@@ -7,7 +7,8 @@ description: >
   目录规则（与 scripts/publish-apk-local.sh 一致）：
   - Debug: REMOTE/debug/versionName/branch-shortSha/mikutoyou-debug-SHA.apk
   - Release: REMOTE/release/tag/mikutoyou-tag.apk
-  versionName 从 android/app/build.gradle 解析。需在调用 step 的 env 中传入 LOCAL_APK_* secrets。
+  versionName 默认从 android/app/build.gradle 解析；独立同步 workflow 可通过 inputs 覆盖 tag/sha/分支名/versionName。
+  需在调用 step 的 env 中传入 LOCAL_APK_* secrets。
 
 inputs:
   build_mode:
@@ -16,6 +17,22 @@ inputs:
   apk_path:
     description: 相对仓库根目录的 APK 路径
     required: true
+  release_tag:
+    description: 仅 release；非空时覆盖 GITHUB_REF_NAME（用于远端路径与 mikutoyou-{tag}.apk）
+    required: false
+    default: ''
+  debug_short_sha:
+    description: 仅 debug；非空时覆盖 GITHUB_SHA 的短 SHA（用于文件名与子目录）
+    required: false
+    default: ''
+  debug_ref_name:
+    description: 仅 debug；非空时覆盖 GITHUB_REF_NAME（用于 debug 子路径中的分支段，斜杠会替换为 -）
+    required: false
+    default: ''
+  version_name:
+    description: 非空时覆盖从 build.gradle 解析的 versionName（debug 归档子路径用）
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -25,6 +42,10 @@ runs:
       env:
         BUILD_MODE: ${{ inputs.build_mode }}
         APK_PATH: ${{ inputs.apk_path }}
+        RELEASE_TAG_INPUT: ${{ inputs.release_tag }}
+        DEBUG_SHORT_SHA_INPUT: ${{ inputs.debug_short_sha }}
+        DEBUG_REF_INPUT: ${{ inputs.debug_ref_name }}
+        VERSION_NAME_INPUT: ${{ inputs.version_name }}
       run: |
         set -euo pipefail
         MODE="${BUILD_MODE}"
@@ -35,19 +56,24 @@ runs:
           exit 1
         fi
 
-        TAG="${GITHUB_REF_NAME}"
-        SHORT_SHA="${GITHUB_SHA:0:7}"
-        SAFE_BRANCH="${GITHUB_REF_NAME//\//-}"
+        TAG="${RELEASE_TAG_INPUT:-${GITHUB_REF_NAME}}"
+        SHORT_SHA="${DEBUG_SHORT_SHA_INPUT:-${GITHUB_SHA:0:7}}"
+        REF_FOR_BRANCH="${DEBUG_REF_INPUT:-${GITHUB_REF_NAME}}"
+        SAFE_BRANCH="${REF_FOR_BRANCH//\//-}"
 
         GRADLE_FILE="android/app/build.gradle"
-        if [[ ! -f "$GRADLE_FILE" ]]; then
-          echo "Missing $GRADLE_FILE" >&2
-          exit 1
-        fi
-        VERSION_NAME="$(grep -E 'versionName\s+"' "$GRADLE_FILE" | head -1 | sed -E 's/.*versionName[[:space:]]+"([^"]+)".*/\1/')"
-        if [[ -z "${VERSION_NAME}" ]]; then
-          echo "Could not parse versionName from $GRADLE_FILE" >&2
-          exit 1
+        if [[ -n "${VERSION_NAME_INPUT}" ]]; then
+          VERSION_NAME="${VERSION_NAME_INPUT}"
+        else
+          if [[ ! -f "$GRADLE_FILE" ]]; then
+            echo "Missing $GRADLE_FILE" >&2
+            exit 1
+          fi
+          VERSION_NAME="$(grep -E 'versionName\s+"' "$GRADLE_FILE" | head -1 | sed -E 's/.*versionName[[:space:]]+"([^"]+)".*/\1/')"
+          if [[ -z "${VERSION_NAME}" ]]; then
+            echo "Could not parse versionName from $GRADLE_FILE" >&2
+            exit 1
+          fi
         fi
 
         if [[ "$MODE" == "debug" ]]; then

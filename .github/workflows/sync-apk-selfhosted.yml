@@ -1,0 +1,135 @@
+# 从 GitHub 拉取「最新正式 Release 的 APK」+「最新成功 Debug workflow 的 Artifact」，再 SSH 推到自建目录。
+# 与打包容器解耦，避免在 assemble 同一 job 里传大包易失败。
+#
+# 触发：定时、手动；或在 Android Release / Android Debug 成功完成后自动再跑一遍。
+# Secrets（与原先内联上传相同）：LOCAL_APK_SSH_HOST、LOCAL_APK_SSH_USER、LOCAL_APK_SSH_KEY、
+#   LOCAL_APK_REMOTE_DIR、LOCAL_APK_BASE_URL；可选 LOCAL_APK_SSH_PORT。
+#
+# 权限：需读取 Releases 与 Actions Artifacts（默认 GITHUB_TOKEN 在本仓库内可读）。
+name: Sync APK to self-hosted
+
+on:
+  workflow_run:
+    workflows:
+      - Android Release Asset
+      - Android Debug
+    types:
+      - completed
+  schedule:
+    # 每 6 小时兜底同步（可按需改 cron）
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: sync-apk-selfhosted
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare staging dir
+        run: mkdir -p sync-staging/release sync-staging/debug
+
+      - name: Download latest Release APK (GitHub Releases)
+        id: rel
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          REPO="${{ github.repository }}"
+          TAG="$(gh api "repos/${REPO}/releases/latest" --jq '.tag_name')"
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+          gh release download "${TAG}" --repo "${REPO}" --pattern 'app-release.apk' --dir sync-staging/release
+          test -f sync-staging/release/app-release.apk
+
+      - name: Download latest Debug APK (workflow artifact)
+        id: dbg
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          REPO="${{ github.repository }}"
+          META="$(gh run list --repo "${REPO}" --workflow=android-debug.yml --status success --limit 1 --json databaseId,headSha,headBranch --jq '.[0]')"
+          RUN_ID="$(echo "${META}" | jq -r '.databaseId')"
+          if [[ -z "${RUN_ID}" || "${RUN_ID}" == "null" ]]; then
+            echo '::warning::未找到成功的 Android Debug 运行记录，已跳过 Debug 同步。'
+            exit 1
+          fi
+          HEAD_SHA="$(echo "${META}" | jq -r '.headSha')"
+          HEAD_BRANCH="$(echo "${META}" | jq -r '.headBranch')"
+          SHORT_SHA="${HEAD_SHA:0:7}"
+          echo "run_id=${RUN_ID}" >> "${GITHUB_OUTPUT}"
+          echo "head_sha=${HEAD_SHA}" >> "${GITHUB_OUTPUT}"
+          echo "short_sha=${SHORT_SHA}" >> "${GITHUB_OUTPUT}"
+          echo "head_branch=${HEAD_BRANCH}" >> "${GITHUB_OUTPUT}"
+          gh run download "${RUN_ID}" --repo "${REPO}" --name app-debug -D sync-staging/debug
+          APK_PATH="$(find sync-staging/debug -type f -name 'app-debug.apk' | head -1)"
+          if [[ -z "${APK_PATH}" ]]; then
+            echo '::error::Artifact 中未找到 app-debug.apk'
+            exit 1
+          fi
+          echo "apk_path=${APK_PATH}" >> "${GITHUB_OUTPUT}"
+
+      - name: Resolve versionName for debug run (from commit)
+        id: dbg_ver
+        if: steps.dbg.outcome == 'success'
+        run: |
+          set -euo pipefail
+          SHA="${{ steps.dbg.outputs.head_sha }}"
+          VER=""
+          if git cat-file -e "${SHA}:android/app/build.gradle" 2>/dev/null; then
+            VER="$(git show "${SHA}:android/app/build.gradle" | grep -E 'versionName\s+"' | head -1 | sed -E 's/.*versionName[[:space:]]+"([^"]+)".*/\1/')"
+          fi
+          if [[ -z "${VER}" ]]; then
+            git fetch --no-tags --depth=50 origin "${SHA}" 2>/dev/null || true
+            if git cat-file -e "${SHA}:android/app/build.gradle" 2>/dev/null; then
+              VER="$(git show "${SHA}:android/app/build.gradle" | grep -E 'versionName\s+"' | head -1 | sed -E 's/.*versionName[[:space:]]+"([^"]+)".*/\1/')"
+            fi
+          fi
+          if [[ -z "${VER}" ]]; then
+            VER="$(grep -E 'versionName\s+"' android/app/build.gradle | head -1 | sed -E 's/.*versionName[[:space:]]+"([^"]+)".*/\1/')"
+            echo '::warning::无法从 debug 提交读取 versionName，已回退为当前默认分支上的 android/app/build.gradle。'
+          fi
+          echo "version_name=${VER}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload Release to self-hosted
+        uses: ./.github/actions/upload-apk-selfhosted
+        with:
+          build_mode: release
+          apk_path: sync-staging/release/app-release.apk
+          release_tag: ${{ steps.rel.outputs.tag }}
+        env:
+          LOCAL_APK_SSH_HOST: ${{ secrets.LOCAL_APK_SSH_HOST }}
+          LOCAL_APK_SSH_PORT: ${{ secrets.LOCAL_APK_SSH_PORT }}
+          LOCAL_APK_SSH_USER: ${{ secrets.LOCAL_APK_SSH_USER }}
+          LOCAL_APK_SSH_KEY: ${{ secrets.LOCAL_APK_SSH_KEY }}
+          LOCAL_APK_REMOTE_DIR: ${{ secrets.LOCAL_APK_REMOTE_DIR }}
+          LOCAL_APK_BASE_URL: ${{ secrets.LOCAL_APK_BASE_URL }}
+
+      - name: Upload Debug to self-hosted
+        if: steps.dbg.outcome == 'success'
+        uses: ./.github/actions/upload-apk-selfhosted
+        with:
+          build_mode: debug
+          apk_path: ${{ steps.dbg.outputs.apk_path }}
+          debug_short_sha: ${{ steps.dbg.outputs.short_sha }}
+          debug_ref_name: ${{ steps.dbg.outputs.head_branch }}
+          version_name: ${{ steps.dbg_ver.outputs.version_name }}
+        env:
+          LOCAL_APK_SSH_HOST: ${{ secrets.LOCAL_APK_SSH_HOST }}
+          LOCAL_APK_SSH_PORT: ${{ secrets.LOCAL_APK_SSH_PORT }}
+          LOCAL_APK_SSH_USER: ${{ secrets.LOCAL_APK_SSH_USER }}
+          LOCAL_APK_SSH_KEY: ${{ secrets.LOCAL_APK_SSH_KEY }}
+          LOCAL_APK_REMOTE_DIR: ${{ secrets.LOCAL_APK_REMOTE_DIR }}
+          LOCAL_APK_BASE_URL: ${{ secrets.LOCAL_APK_BASE_URL }}
