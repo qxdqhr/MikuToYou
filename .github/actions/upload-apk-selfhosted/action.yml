@@ -130,8 +130,25 @@ runs:
         echo "== SSH 预检（echo；失败则与 APK 流传输无关）=="
         ssh "${SSH_OPTS[@]}" -p "${PORT}" "${LOCAL_APK_SSH_USER}@${LOCAL_APK_SSH_HOST}" "echo mikutoyou-ssh-ok"
         UPLOADING="${REMOTE_PATH}/${APK_NAME}.uploading"
-        ssh "${SSH_OPTS[@]}" -p "${PORT}" "${LOCAL_APK_SSH_USER}@${LOCAL_APK_SSH_HOST}" \
-          "mkdir -p '${REMOTE_PATH}' && cat > '${UPLOADING}' && mv -f '${UPLOADING}' '${REMOTE_PATH}/${APK_NAME}'" < "$APK"
+        APK_BYTES="$(wc -c < "${APK}" | tr -d ' ')"
+        echo "== APK 流传输（stdin → 远端 cat，约 ${APK_BYTES} bytes；经 frp/反代时易因超时断开，失败将自动重试）=="
+        upload_ok=0
+        for attempt in 1 2 3; do
+          echo "APK upload attempt ${attempt}/3 ..."
+          if ssh "${SSH_OPTS[@]}" -p "${PORT}" "${LOCAL_APK_SSH_USER}@${LOCAL_APK_SSH_HOST}" \
+            "mkdir -p '${REMOTE_PATH}' && cat > '${UPLOADING}' && mv -f '${UPLOADING}' '${REMOTE_PATH}/${APK_NAME}'" < "$APK"; then
+            upload_ok=1
+            break
+          fi
+          if [[ "${attempt}" -lt 3 ]]; then
+            echo '::warning::APK 流传输失败（常见：nginx stream proxy_timeout、frp 心跳/缓冲区）；10s 后重试...'
+            sleep 10
+          fi
+        done
+        if [[ "${upload_ok}" -ne 1 ]]; then
+          echo '::error::APK 流传输 3 次均失败。请在阿里云 stream / frp 上加大超时与传输限制（例如 nginx stream 段 proxy_connect_timeout / proxy_timeout；frp transport.heartbeat*）。预检已通过说明密钥与端口握手正常。'
+          exit 1
+        fi
         DOWNLOAD_URL="${LOCAL_APK_BASE_URL%/}/${URL_SUFFIX}"
 
         # 固定「最新」路径，便于反代根目录直达（不依赖版本号/SHA 子目录）。
@@ -144,8 +161,20 @@ runs:
           LATEST_NAME="mikutoyou-release.apk"
           LATEST_URL="${LOCAL_APK_BASE_URL%/}/release/latest/${LATEST_NAME}"
         fi
-        ssh "${SSH_OPTS[@]}" -p "${PORT}" "${LOCAL_APK_SSH_USER}@${LOCAL_APK_SSH_HOST}" \
-          "mkdir -p '${LATEST_DIR}' && cp -f '${REMOTE_PATH}/${APK_NAME}' '${LATEST_DIR}/${LATEST_NAME}'"
+        latest_ok=0
+        for attempt in 1 2 3; do
+          echo "latest copy attempt ${attempt}/3 ..."
+          if ssh "${SSH_OPTS[@]}" -p "${PORT}" "${LOCAL_APK_SSH_USER}@${LOCAL_APK_SSH_HOST}" \
+            "mkdir -p '${LATEST_DIR}' && cp -f '${REMOTE_PATH}/${APK_NAME}' '${LATEST_DIR}/${LATEST_NAME}'"; then
+            latest_ok=1
+            break
+          fi
+          [[ "${attempt}" -lt 3 ]] && sleep 8
+        done
+        if [[ "${latest_ok}" -ne 1 ]]; then
+          echo '::error::写入 debug/latest 或 release/latest 失败（远端 cp）。主 APK 可能已上传成功，请 SSH 登录检查。'
+          exit 1
+        fi
 
         if [[ "$MODE" == "release" ]]; then
           echo "APK_DOWNLOAD_URL=${DOWNLOAD_URL}" >> "${GITHUB_ENV}"
