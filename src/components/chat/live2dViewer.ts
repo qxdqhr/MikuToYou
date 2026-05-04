@@ -201,6 +201,52 @@ font-size:11px;background:rgba(0,0,0,.45);padding:8px;border-radius:8px;word-bre
       model.position.set(sw/2, sh*0.52);
       app.stage.addChild(model);
 
+      var motionList = [];
+      try {
+        var motionsDef =
+          settings &&
+          settings.FileReferences &&
+          settings.FileReferences.Motions;
+        if (motionsDef && typeof motionsDef === 'object') {
+          motionList = Object.keys(motionsDef)
+            .map(function (g) {
+              var arr = motionsDef[g];
+              var count = Array.isArray(arr) ? arr.length : 0;
+              return { group: g, count: count };
+            })
+            .filter(function (x) {
+              return x.count > 0;
+            });
+        }
+      } catch (eCap) {
+        motionList = [];
+      }
+
+      window.__mt_model = model;
+      window.__mt_dispatch = function (payloadJson) {
+        try {
+          var cmd =
+            typeof payloadJson === 'string'
+              ? JSON.parse(payloadJson)
+              : payloadJson;
+          var mdl = window.__mt_model;
+          if (!mdl || !cmd || cmd.kind !== 'motion') {
+            return;
+          }
+          var idx =
+            typeof cmd.index === 'number' && !isNaN(cmd.index) ? cmd.index : 0;
+          mdl.motion(cmd.group, idx);
+        } catch (err) {
+          post({
+            type: 'live2d-motion-error',
+            message: String(err && err.message ? err.message : err),
+          });
+        }
+      };
+
+      post({ type: 'live2d-capabilities', motions: motionList });
+      post({ type: 'live2d-loaded', modelUrl: MODEL_URL });
+
       function resize(){
         var nw=Math.max(1,Math.floor(window.innerWidth));
         var nh=Math.max(1,Math.floor(window.innerHeight));
@@ -211,7 +257,6 @@ font-size:11px;background:rgba(0,0,0,.45);padding:8px;border-radius:8px;word-bre
       }
       window.addEventListener('resize',resize);
 
-      post({type:'live2d-loaded',modelUrl:MODEL_URL});
     }catch(e){
       var msg=e&&e.message?String(e.message):String(e);
       try{

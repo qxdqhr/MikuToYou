@@ -1,6 +1,8 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
+import type { AvatarMotionCommand } from '../../modules/motionPort';
+import { useMotionPort } from '../../modules/motionPort';
 import { colors, radius, space } from '../../theme/tokens';
 import {
   buildLive2dPlaceholderHtml,
@@ -15,6 +17,8 @@ type Props = {
 export function Live2DPanel({ modelUrl }: Props) {
   const [failed, setFailed] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
+  const webRef = useRef<React.ElementRef<typeof WebView>>(null);
+  const { publishCapabilities, registerExecutor } = useMotionPort();
 
   const trimmed = modelUrl.trim();
   const baseUrl = useMemo(() => live2dWebViewBaseUrl(trimmed), [trimmed]);
@@ -30,26 +34,70 @@ export function Live2DPanel({ modelUrl }: Props) {
     [trimmed, failed],
   );
 
-  const onMessage = useCallback((e: { nativeEvent: { data: string } }) => {
-    try {
-      const data = JSON.parse(e.nativeEvent.data) as {
-        type?: string;
-        message?: string;
-      };
-      if (data.type === 'live2d-loaded') {
-        setFailed(false);
-        setHint(null);
-      } else if (data.type === 'live2d-empty') {
-        setFailed(false);
-        setHint(null);
-      } else if (data.type === 'live2d-error') {
-        setFailed(true);
-        setHint(data.message ?? '未知错误');
-      }
-    } catch {
-      // ignore
+  useEffect(() => {
+    if (failed) {
+      publishCapabilities(null);
     }
-  }, []);
+  }, [failed, publishCapabilities]);
+
+  useEffect(() => {
+    const play = (cmd: AvatarMotionCommand) => {
+      const w = webRef.current;
+      if (!w) {
+        return;
+      }
+      const inner = JSON.stringify(cmd);
+      const lit = JSON.stringify(inner);
+      w.injectJavaScript(
+        `try{if(window.__mt_dispatch){window.__mt_dispatch(JSON.parse(${lit}));}}catch(e){}`,
+      );
+    };
+    registerExecutor(play);
+    return () => {
+      registerExecutor(null);
+    };
+  }, [registerExecutor, webKey]);
+
+  const onMessage = useCallback(
+    (e: { nativeEvent: { data: string } }) => {
+      try {
+        const data = JSON.parse(e.nativeEvent.data) as {
+          type?: string;
+          message?: string;
+          motions?: { group: string; count: number }[];
+        };
+        if (data.type === 'live2d-capabilities') {
+          const motions = data.motions;
+          if (Array.isArray(motions)) {
+            const parsed = motions.filter(
+              m =>
+                m &&
+                typeof m.group === 'string' &&
+                typeof m.count === 'number',
+            );
+            publishCapabilities(parsed);
+          } else {
+            publishCapabilities(null);
+          }
+        }
+        if (data.type === 'live2d-loaded') {
+          setFailed(false);
+          setHint(null);
+        } else if (data.type === 'live2d-empty') {
+          setFailed(false);
+          setHint(null);
+          publishCapabilities(null);
+        } else if (data.type === 'live2d-error') {
+          setFailed(true);
+          setHint(data.message ?? '未知错误');
+          publishCapabilities(null);
+        }
+      } catch {
+        // ignore
+      }
+    },
+    [publishCapabilities],
+  );
 
   const onError = useCallback(() => {
     setFailed(true);
@@ -79,6 +127,7 @@ export function Live2DPanel({ modelUrl }: Props) {
   return (
     <View style={styles.panel}>
       <WebView
+        ref={webRef}
         key={webKey}
         originWhitelist={['*']}
         source={{ html, baseUrl }}

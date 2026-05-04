@@ -13,6 +13,7 @@ import { Live2DPanel } from '../components/chat/Live2DPanel';
 import { MessageList } from '../components/chat/MessageList';
 import { EmptyState } from '../components/feedback/EmptyState';
 import { TopBar } from '../components/layout/TopBar';
+import { useDialogEventBus } from '../modules/dialogEvents';
 import type { RootTabParamList } from '../navigation/RootTabs';
 import { sendChatMessage } from '../modules/llm';
 import { newId, useApp } from '../state/AppContext';
@@ -23,6 +24,7 @@ type Nav = BottomTabNavigationProp<RootTabParamList, 'Chat'>;
 export function ChatScreen() {
   const navigation = useNavigation<Nav>();
   const { settings, messages, appendMessage, ready } = useApp();
+  const dialogBus = useDialogEventBus();
   const [sending, setSending] = useState(false);
 
   const apiConfigured = useMemo(
@@ -45,11 +47,16 @@ export function ChatScreen() {
       setSending(true);
       try {
         const reply = await sendChatMessage(settings, historyWithUser);
-        await appendMessage({
+        const assistantMsg = {
           id: newId(),
-          role: 'assistant',
+          role: 'assistant' as const,
           content: reply,
           timestamp: Date.now(),
+        };
+        await appendMessage(assistantMsg);
+        dialogBus.emit({
+          type: 'chat.assistant.completed',
+          payload: { text: reply, messageId: assistantMsg.id },
         });
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -63,7 +70,7 @@ export function ChatScreen() {
         setSending(false);
       }
     },
-    [apiConfigured, appendMessage, settings],
+    [apiConfigured, appendMessage, dialogBus, settings],
   );
 
   if (!ready) {
