@@ -16,6 +16,8 @@ export interface AppSettings {
   apiBaseUrl: string;
   apiKey: string;
   model: string;
+  /** 公共附加提示词：发往 LLM 时追加在每条用户消息之后；聊天记录中仍为原文 */
+  publicAppendPrompt: string;
   live2dModelUrl: string;
   /** 预置人格（仅 system 注入，不落库到聊天记录） */
   personalityPresets: PersonalityPreset[];
@@ -27,6 +29,7 @@ export const defaultAppSettings: AppSettings = {
   apiBaseUrl: DEFAULT_LLM_API_BASE_URL,
   apiKey: DEV_SILICONFLOW_TEST_API_KEY,
   model: DEFAULT_LLM_MODEL,
+  publicAppendPrompt: '',
   live2dModelUrl: DEFAULT_LIVE2D_MODEL3_JSON_URL,
   personalityPresets: DEFAULT_PERSONALITY_PRESETS.map(p => ({ ...p })),
   activePersonalityId: DEFAULT_PERSONALITY_PRESETS[0]?.id ?? null,

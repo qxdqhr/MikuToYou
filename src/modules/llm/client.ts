@@ -20,7 +20,9 @@ function chatCompletionsUrl(base: string): string {
 
 function toApiMessages(
   history: ChatMessage[],
+  settings: AppSettings,
 ): { role: string; content: string }[] {
+  const append = settings.publicAppendPrompt.trim();
   return history
     .filter(
       m =>
@@ -28,7 +30,12 @@ function toApiMessages(
         m.role === 'assistant' ||
         m.role === 'system',
     )
-    .map(m => ({ role: m.role, content: m.content }));
+    .map(m => {
+      if (m.role === 'user' && append) {
+        return { role: m.role, content: `${m.content}\n\n${append}` };
+      }
+      return { role: m.role, content: m.content };
+    });
 }
 
 export async function sendChatMessage(
@@ -36,7 +43,10 @@ export async function sendChatMessage(
   conversation: ChatMessage[],
 ): Promise<string> {
   const url = chatCompletionsUrl(settings.apiBaseUrl);
-  const messages = toApiMessages(buildLlmMessageList(settings, conversation));
+  const messages = toApiMessages(
+    buildLlmMessageList(settings, conversation),
+    settings,
+  );
 
   const res = await fetch(url, {
     method: 'POST',

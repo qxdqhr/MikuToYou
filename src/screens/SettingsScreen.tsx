@@ -46,11 +46,17 @@ export function SettingsScreen() {
 
   const llmHint = useMemo(() => {
     const m = draft.model.trim();
+    let line: string;
     if (!draft.apiBaseUrl.trim()) {
-      return '未填写 API 地址';
+      line = '未填写 API 地址';
+    } else {
+      line = m || DEFAULT_LLM_MODEL;
     }
-    return m || DEFAULT_LLM_MODEL;
-  }, [draft.apiBaseUrl, draft.model]);
+    if (draft.publicAppendPrompt.trim()) {
+      line = `${line} · 已设附加提示`;
+    }
+    return line;
+  }, [draft.apiBaseUrl, draft.model, draft.publicAppendPrompt]);
 
   const live2dHint = useMemo(() => {
     const u = draft.live2dModelUrl.trim();
@@ -104,41 +110,48 @@ export function SettingsScreen() {
       <ScrollView
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled">
-        <Pressable style={styles.subEntry} onPress={() => setPage('llm')}>
-          <Text style={styles.subEntryTitle}>大模型 API</Text>
-          <Text style={styles.subEntryHint}>{llmHint}</Text>
-        </Pressable>
-
-        <Pressable style={styles.subEntry} onPress={() => setPage('live2d')}>
-          <Text style={styles.subEntryTitle}>Live2D 模型</Text>
-          <Text style={styles.subEntryHint}>{live2dHint}</Text>
-        </Pressable>
-
-        <Pressable style={styles.fillTestBtn} onPress={applyTestPreset}>
-          <Text style={styles.fillTestBtnText}>填入测试信息</Text>
-        </Pressable>
-
-        <View style={styles.actions}>
-          <Pressable style={styles.primary} onPress={() => void onSave()}>
-            <Text style={styles.primaryText}>保存设置</Text>
-          </Pressable>
-          <Pressable
-            style={styles.secondary}
-            disabled={testing}
-            onPress={() => void onTest()}>
-            <Text style={styles.secondaryText}>
-              {testing ? '测试中…' : '测试连接'}
-            </Text>
-          </Pressable>
-          <Pressable style={styles.danger} onPress={onClearChat}>
-            <Text style={styles.dangerText}>清空聊天记录</Text>
-          </Pressable>
+        <View>
+          <Text style={styles.sectionTitle}>二级页面</Text>
+          <View style={styles.sectionBody}>
+            <Pressable style={styles.subEntry} onPress={() => setPage('llm')}>
+              <Text style={styles.subEntryTitle}>大模型设置</Text>
+              <Text style={styles.subEntryHint}>{llmHint}</Text>
+            </Pressable>
+            <Pressable style={styles.subEntry} onPress={() => setPage('live2d')}>
+              <Text style={styles.subEntryTitle}>Live2D 模型</Text>
+              <Text style={styles.subEntryHint}>{live2dHint}</Text>
+            </Pressable>
+            <Pressable style={styles.subEntry} onPress={() => setPage('about')}>
+              <Text style={styles.subEntryTitle}>关于</Text>
+              <Text style={styles.subEntryHint}>查看应用版本信息</Text>
+            </Pressable>
+          </View>
         </View>
 
-        <Pressable style={styles.subEntry} onPress={() => setPage('about')}>
-          <Text style={styles.subEntryTitle}>关于</Text>
-          <Text style={styles.subEntryHint}>查看应用版本信息</Text>
-        </Pressable>
+        <View>
+          <Text style={styles.sectionTitle}>操作</Text>
+          <View style={styles.sectionBody}>
+            <Pressable style={styles.fillTestBtn} onPress={applyTestPreset}>
+              <Text style={styles.fillTestBtnText}>填入测试信息</Text>
+            </Pressable>
+            <View style={styles.actions}>
+              <Pressable style={styles.primary} onPress={() => void onSave()}>
+                <Text style={styles.primaryText}>保存设置</Text>
+              </Pressable>
+              <Pressable
+                style={styles.secondary}
+                disabled={testing}
+                onPress={() => void onTest()}>
+                <Text style={styles.secondaryText}>
+                  {testing ? '测试中…' : '测试连接'}
+                </Text>
+              </Pressable>
+              <Pressable style={styles.danger} onPress={onClearChat}>
+                <Text style={styles.dangerText}>清空聊天记录</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
 
         <Text style={styles.hint}>
           纯客户端直连 API 时，请妥善保管 API Key；不要提交到公开仓库。
@@ -159,7 +172,7 @@ export function SettingsScreen() {
               {page === 'about'
                 ? '关于'
                 : page === 'llm'
-                  ? '大模型 API'
+                  ? '大模型设置'
                   : 'Live2D 模型'}
             </Text>
             <View style={styles.subHeaderSpacer} />
@@ -197,6 +210,16 @@ export function SettingsScreen() {
                 value={draft.model}
                 onChangeText={v => setDraft(s => ({ ...s, model: v }))}
                 placeholder={DEFAULT_LLM_MODEL}
+                autoCapitalize="none"
+              />
+              <Field
+                label="公共附加提示词"
+                value={draft.publicAppendPrompt}
+                onChangeText={v =>
+                  setDraft(s => ({ ...s, publicAppendPrompt: v }))
+                }
+                placeholder="可选；保存后，主页每条提问发往模型时都会自动附加在问题之后（聊天列表仍显示原文）"
+                multiline
                 autoCapitalize="none"
               />
               <Pressable
@@ -247,6 +270,7 @@ type FieldProps = {
   placeholder?: string;
   secureTextEntry?: boolean;
   autoCapitalize?: 'none' | 'sentences';
+  multiline?: boolean;
 };
 
 function Field({
@@ -256,6 +280,7 @@ function Field({
   placeholder,
   secureTextEntry,
   autoCapitalize,
+  multiline,
 }: FieldProps) {
   return (
     <View style={styles.field}>
@@ -265,9 +290,11 @@ function Field({
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={colors.textSub}
-        style={styles.input}
+        style={[styles.input, multiline ? styles.inputMultiline : null]}
         secureTextEntry={secureTextEntry}
         autoCapitalize={autoCapitalize}
+        multiline={multiline}
+        textAlignVertical={multiline ? 'top' : 'center'}
       />
     </View>
   );
@@ -285,6 +312,17 @@ const styles = StyleSheet.create({
   scroll: {
     padding: space.md,
     paddingBottom: space.xl,
+    gap: space.lg,
+  },
+  sectionTitle: {
+    color: colors.textSub,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    marginBottom: space.sm,
+  },
+  sectionBody: {
+    gap: space.sm,
   },
   subScroll: {
     flex: 1,
@@ -311,6 +349,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.sm,
     paddingVertical: 10,
   },
+  inputMultiline: {
+    minHeight: 100,
+    paddingTop: 10,
+  },
   demoBtn: {
     alignSelf: 'flex-start',
     marginTop: -space.sm,
@@ -324,8 +366,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   fillTestBtn: {
-    marginTop: space.sm,
-    marginBottom: space.md,
     alignSelf: 'flex-start',
     backgroundColor: 'rgba(255,255,255,0.1)',
     paddingVertical: 10,
@@ -340,7 +380,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   actions: {
-    marginTop: space.sm,
     gap: space.sm,
   },
   primary: {
@@ -376,13 +415,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   hint: {
-    marginTop: space.md,
     color: colors.warning,
     fontSize: 12,
     lineHeight: 16,
   },
   subEntry: {
-    marginBottom: space.sm,
     borderRadius: radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
